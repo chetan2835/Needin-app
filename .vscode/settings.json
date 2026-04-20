@@ -1,0 +1,24 @@
+{
+    "cmake.sourceDirectory": "C:/Users/punjc/OneDrive/Desktop/needin_app/needin_app/linux",
+    "java.configuration.updateBuildConfiguration": "interactive",
+    "deno.enable": false,
+    "deno.enablePaths": [
+        "supabase/functions/_shared",
+        "supabase/functions/create-account",
+        "supabase/functions/verify-mpin",
+        "supabase/functions/calculate-price",
+        "supabase/functions/maps-proxy",
+        "supabase/functions/digilocker-callback",
+        "supabase/functions/digilocker-initiate",
+        "supabase/functions/digilocker-status",
+        "supabase/functions/parcel-engine"
+    ],
+    "deno.importMap": "./supabase/functions/import_map.json",
+    "deno.lint": true,
+    "deno.unstable": false,
+    "[typescript]": {
+        "editor.defaultFormatter": "denoland.vscode-deno"
+    },
+    "typescript.validate.enable": false,
+    "typescript.suggest.enabled": false
+}

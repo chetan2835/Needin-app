@@ -1,0 +1,5 @@
+﻿WARNING|STATIC_WARNING|INCLUDE_FILE_NOT_FOUND|C:\\flutter_projects\\needin_app\\analysis_options.yaml|10|10|34|The URI 'package:flutter_lints/flutter.yaml' included in 'C:\\flutter_projects\\needin_app\\analysis_options.yaml' can't be found when analyzing 'C:\\flutter_projects\\needin_app'.
+INFO|HINT|DEPRECATED_MEMBER_USE|C:\\flutter_projects\\needin_app\\lib\\screens\\onboarding\\onboarding1.dart|57|56|11|'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss.
+INFO|HINT|DEPRECATED_MEMBER_USE|C:\\flutter_projects\\needin_app\\lib\\screens\\onboarding\\onboarding1.dart|60|60|11|'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss.
+INFO|HINT|DEPRECATED_MEMBER_USE|C:\\flutter_projects\\needin_app\\lib\\screens\\onboarding\\onboarding1.dart|172|56|11|'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss.
+

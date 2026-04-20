@@ -1,0 +1,9 @@
+Analyzing needin_app...
+
+  error - lib\screens\onboarding\onboarding_screen.dart:48:49 - The name 'LoginScreen' isn't a class. Try correcting the name to match an existing class. - creation_with_non_type
+warning - analysis_options.yaml:10:10 - The URI 'package:flutter_lints/flutter.yaml' included in 'C:\flutter_projects\needin_app\analysis_options.yaml' can't be found when analyzing 'C:\flutter_projects\needin_app'. - include_file_not_found
+   info - lib\screens\onboarding\onboarding1.dart:57:56 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\screens\onboarding\onboarding1.dart:60:60 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\screens\onboarding\onboarding1.dart:172:56 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+
+5 issues found.
