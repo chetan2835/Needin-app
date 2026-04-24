@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/widgets/mpin_input_widget.dart';
 import '../../core/services/local_storage_service.dart';
+import '../../core/services/supabase_service.dart';
 import '../login/service_selection_page.dart';
 
 class SetNewMpinScreen extends StatefulWidget {
@@ -37,15 +39,38 @@ class _SetNewMpinScreenState extends State<SetNewMpinScreen> {
     try {
       // Upsert just uses create-account but without the other fields
       // Ensure your create-account gracefully ignores missing full_name
-      final response = await Supabase.instance.client.functions.invoke(
-        'set-mpin',
-        body: {
-          'user_id': widget.userId,
-          'mpin': _mpin,
-        },
-      );
-
-      final data = response.data;
+      Map<String, dynamic> data;
+      
+      if (kDebugMode && (defaultTargetPlatform == TargetPlatform.windows || 
+                         defaultTargetPlatform == TargetPlatform.macOS || 
+                         defaultTargetPlatform == TargetPlatform.linux)) {
+        // Bypass edge function for desktop mock
+        await Future.delayed(const Duration(milliseconds: 500));
+        data = {
+          'success': true,
+          'user': {
+            'id': widget.userId,
+            'full_name': 'Desktop User',
+            'phone': widget.phoneNumber,
+            'role': 'user'
+          }
+        };
+      } else {
+        // Ensure the profile row exists in Supabase so the Edge Function's .single() doesn't crash
+        await SupabaseService().upsertUserProfile(
+          userId: widget.userId,
+          phone: widget.phoneNumber,
+        );
+        
+        final response = await Supabase.instance.client.functions.invoke(
+          'set-mpin',
+          body: {
+            'user_id': widget.userId,
+            'mpin': _mpin,
+          },
+        );
+        data = response.data;
+      }
       if (data['success'] == true) {
         // Reload local session from response
         final u = data['user'];

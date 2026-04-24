@@ -1,6 +1,6 @@
 {
     "cmake.sourceDirectory": "C:/Users/punjc/OneDrive/Desktop/needin_app/needin_app/linux",
-    "java.configuration.updateBuildConfiguration": "interactive",
+    "java.configuration.updateBuildConfiguration": "automatic",
     "deno.enable": false,
     "deno.enablePaths": [
         "supabase/functions/_shared",

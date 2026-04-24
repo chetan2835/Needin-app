@@ -49,10 +49,17 @@ serve(async (req: Request): Promise<Response> => {
       })
       .eq('id', user_id)
       .select('id, full_name, phone, city, photo_url, role')
-      .single();
+      .maybeSingle();
 
     if (error) {
       throw new Error(error.message);
+    }
+
+    if (!profile) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'User profile not found. Please complete registration first.' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     return new Response(JSON.stringify({ success: true, user: profile }), {

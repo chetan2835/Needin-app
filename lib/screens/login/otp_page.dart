@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/supabase_service.dart';
 import '../auth/set_new_mpin_screen.dart';
+import '../onboarding/account_details_screen.dart';
 
 class OtpPage extends StatefulWidget {
   final String phoneNumber;
@@ -41,7 +43,18 @@ class _OtpPageState extends State<OtpPage> {
     });
 
     final otp = otpDigits.join();
-    final userCredential = await AuthService().verifyOTP(otp);
+    String? userId;
+    
+    if (kDebugMode && (defaultTargetPlatform == TargetPlatform.windows || 
+                       defaultTargetPlatform == TargetPlatform.macOS || 
+                       defaultTargetPlatform == TargetPlatform.linux)) {
+      // Bypass Firebase Auth for desktop mock
+      await Future.delayed(const Duration(seconds: 1)); // Simulate network
+      userId = "mock-desktop-user-id";
+    } else {
+      final userCredential = await AuthService().verifyOTP(otp);
+      userId = userCredential?.user?.uid;
+    }
 
     if (!mounted) return;
 
@@ -49,31 +62,27 @@ class _OtpPageState extends State<OtpPage> {
       _isLoading = false;
     });
 
-    if (userCredential != null) {
-      final user = userCredential.user;
-      if (user != null) {
-        try {
-          await SupabaseService().upsertUserProfile(
-            userId: user.uid,
-            phone: widget.phoneNumber,
-          );
-        } catch (e) {
-          debugPrint("Failed to save phone to supabase: $e");
-        }
-        
-        if (!mounted) return;
+    if (userId != null) {
+      final profile = await SupabaseService().getUserProfile(userId);
+      if (!mounted) return;
 
-        Navigator.push(context,
+      if (profile == null) {
+        // Profile does not exist (registration was incomplete)
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const AccountDetailsScreen()),
+          (route) => false,
+        );
+      } else {
+        // Profile exists, proceed to set new MPIN (or login)
+        Navigator.push(
+          context,
           MaterialPageRoute(
             builder: (_) => SetNewMpinScreen(
-              userId: user.uid,
+              userId: userId!,
               phoneNumber: widget.phoneNumber,
             ),
           ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Invalid user credential.')),
         );
       }
     } else {

@@ -23,6 +23,12 @@ class AuthService {
         _confirmationResult = await _auth.signInWithPhoneNumber(phoneNumber);
         _verificationId = _confirmationResult!.verificationId;
         codeSent(_verificationId ?? "web-verification-id");
+      } else if (defaultTargetPlatform == TargetPlatform.windows ||
+                 defaultTargetPlatform == TargetPlatform.macOS ||
+                 defaultTargetPlatform == TargetPlatform.linux) {
+        // Mock phone auth for desktop
+        _verificationId = 'mock-verification-id';
+        codeSent(_verificationId!);
       } else {
         // Android / iOS handling
         await _auth.verifyPhoneNumber(
@@ -58,6 +64,11 @@ class AuthService {
       if (kIsWeb) {
         if (_confirmationResult == null) throw Exception("Confirmation result missing for Web.");
         return await _confirmationResult!.confirm(otp);
+      } else if (defaultTargetPlatform == TargetPlatform.windows ||
+                 defaultTargetPlatform == TargetPlatform.macOS ||
+                 defaultTargetPlatform == TargetPlatform.linux) {
+        // Mock sign in for desktop
+        return await _auth.signInAnonymously();
       } else {
         if (_verificationId == null) throw Exception("Verification ID is missing. Request OTP first.");
         PhoneAuthCredential credential = PhoneAuthProvider.credential(
@@ -68,8 +79,18 @@ class AuthService {
       }
     } catch (e) {
       if (kDebugMode) {
-        debugPrint("OTP Verification failed: \$e");
+        debugPrint("OTP Verification failed: $e");
       }
+      return null;
+    }
+  }
+
+  /// Sign in anonymously
+  Future<UserCredential?> signInAnonymously() async {
+    try {
+      return await _auth.signInAnonymously();
+    } catch (e) {
+      debugPrint("Anonymous sign in failed: $e");
       return null;
     }
   }

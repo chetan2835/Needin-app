@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:flutter_google_places_sdk/flutter_google_places_sdk.dart' hide LatLng, LatLngBounds;
+import 'package:google_places_sdk_plus/google_places_sdk_plus.dart' hide LatLng, LatLngBounds;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
@@ -156,7 +156,7 @@ class MapService {
         final result = await _placesSdk!.findAutocompletePredictions(query);
         final preds = result.predictions.map((p) {
           // Build structured_formatting-compatible map from SDK result
-          final desc = p.fullText;
+          final desc = p.fullText ?? '';
           final parts = desc.split(', ');
           final mainText = parts.isNotEmpty ? parts[0] : desc;
           final secondaryText = parts.length > 1 ? parts.sublist(1).join(', ') : '';
@@ -251,13 +251,13 @@ class MapService {
         if (_placesSdk != null) {
           final result = await _placesSdk!.fetchPlace(
             placeId,
-            fields: [PlaceField.Location, PlaceField.Name, PlaceField.Address],
+            fields: [PlaceField.Location, PlaceField.DisplayName, PlaceField.FormattedAddress],
           );
           final place = result.place;
           if (place != null && place.latLng != null) {
             _renewSessionToken();
             return PlaceLocation(
-              name: place.name ?? place.address ?? 'Unknown',
+              name: place.displayName?.text ?? place.address ?? 'Unknown',
               address: place.address ?? '',
               lat: place.latLng!.lat,
               lng: place.latLng!.lng,

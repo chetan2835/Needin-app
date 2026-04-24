@@ -21,8 +21,8 @@ import 'screens/needin_express/verification_success_screen.dart';
 import 'screens/needin_express/verification_failed_screen.dart';
 
 // IMPORTANT: Replace these with your actual Supabase URL and Anon Key.
-const String supabaseUrl = String.fromEnvironment('SUPABASE_URL', defaultValue: 'https://ghiydlxlvrfkgzngnonk.supabase.co');
-const String supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY', defaultValue: 'YOUR_KEY');
+const String supabaseUrl = '';
+const String supabaseAnonKey = '';
 
 /// Global navigator key for deep link navigation from outside widget tree
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -51,8 +51,8 @@ void main() async {
 
   // Initialize Supabase
   await Supabase.initialize(
-    url: supabaseUrl,
-    anonKey: supabaseAnonKey,
+    url: dotenv.env['SUPABASE_URL'] ?? supabaseUrl,
+    anonKey: dotenv.env['SUPABASE_ANON_KEY'] ?? supabaseAnonKey,
   );
 
   // Initialize language service

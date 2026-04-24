@@ -68,7 +68,7 @@ serve(async (req: Request): Promise<Response> => {
       .from('profiles')
       .select('*')
       .eq('id', user_id)
-      .single();
+      .maybeSingle();
 
     // Upsert profile row
     const { data, error } = await supabase

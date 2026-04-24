@@ -31,7 +31,7 @@ dependencies:
   flutter_dotenv: ^5.2.1
   cached_network_image: ^3.4.1
   flutter_image_compress: ^2.3.0
-  flutter_google_places_sdk: ^0.4.3
+  google_places_sdk_plus: ^1.1.0
 
 dev_dependencies:
   flutter_test:
