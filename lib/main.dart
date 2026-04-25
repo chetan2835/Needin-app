@@ -19,6 +19,7 @@ import 'core/services/local_storage_service.dart';
 import 'screens/auth/mpin_screen.dart';
 import 'screens/needin_express/verification_success_screen.dart';
 import 'screens/needin_express/verification_failed_screen.dart';
+import 'screens/login/service_selection_page.dart';
 
 // IMPORTANT: Replace these with your actual Supabase URL and Anon Key.
 const String supabaseUrl = '';
@@ -168,10 +169,8 @@ class _MyAppState extends State<MyApp> {
   }
 
   Widget _getDestination() {
-    if (isFirstTime) return const Onboarding1();
-    if (isLoggedIn) return const MpinScreen();
-    // They finished onboarding but are not logged in
-    return const LoginPage();
+    // BYPASS: Direct open to choose service page
+    return const ServiceSelectionPage();
   }
 
   @override
