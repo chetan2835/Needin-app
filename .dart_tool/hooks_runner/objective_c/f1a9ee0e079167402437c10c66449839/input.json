@@ -1,0 +1,29 @@
+{
+  "assets": {},
+  "config": {
+    "build_asset_types": [
+      "code_assets/code"
+    ],
+    "extensions": {
+      "code_assets": {
+        "android": {
+          "target_ndk_api": 24
+        },
+        "c_compiler": {
+          "ar": "C:\\Users\\vansh\\AppData\\Local\\Android\\sdk\\ndk\\30.0.14904198\\toolchains\\llvm\\prebuilt\\windows-x86_64\\bin\\llvm-ar.exe",
+          "cc": "C:\\Users\\vansh\\AppData\\Local\\Android\\sdk\\ndk\\30.0.14904198\\toolchains\\llvm\\prebuilt\\windows-x86_64\\bin\\clang.exe",
+          "ld": "C:\\Users\\vansh\\AppData\\Local\\Android\\sdk\\ndk\\30.0.14904198\\toolchains\\llvm\\prebuilt\\windows-x86_64\\bin\\ld.lld.exe"
+        },
+        "link_mode_preference": "dynamic",
+        "target_architecture": "x64",
+        "target_os": "android"
+      }
+    },
+    "linking_enabled": true
+  },
+  "out_dir_shared": "E:\\needin_app (4)\\needin_app (2)\\needin_app\\.dart_tool\\hooks_runner\\shared\\objective_c\\build\\",
+  "out_file": "E:\\needin_app (4)\\needin_app (2)\\needin_app\\.dart_tool\\hooks_runner\\objective_c\\f1a9ee0e079167402437c10c66449839\\output.json",
+  "package_name": "objective_c",
+  "package_root": "C:\\Users\\vansh\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\objective_c-9.3.0\\",
+  "user_defines": {}
+}
