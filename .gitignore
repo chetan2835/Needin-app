@@ -48,3 +48,8 @@ app.*.map.json
 .env
 *.env
 .env.*
+
+# Android signing secrets — NEVER commit
+android/key.properties
+*.jks
+*.keystore

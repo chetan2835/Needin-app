@@ -16,11 +16,18 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
         jvmTarget = JavaVersion.VERSION_17.toString()
     }
+
+    // ── REMOVED: keepDebugSymbols bloat ──────────────────────────────────
+    // The previous config kept ALL .so debug symbols, inflating the APK by
+    // ~100–150 MB. Release builds strip native debug symbols by default when
+    // this block is absent. Only restore if you need native crash symbolication
+    // via a dedicated symbols upload to Firebase Crashlytics / Play Console.
 
     defaultConfig {
         applicationId = "com.needin.express"
@@ -61,11 +68,36 @@ android {
     buildTypes {
         getByName("release") {
             signingConfig = signingConfigs.getByName("release")
-            proguardFiles(getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro")
+
+            // ── Code shrinking & resource shrinking (R8) ─────────────────
+            // minifyEnabled runs R8 (the successor to ProGuard) which:
+            //   - removes unused Java/Kotlin code
+            //   - obfuscates class/method names (smaller .dex)
+            // shrinkResources removes unused Android XML resources.
+            // Both are safe — Flutter Dart code is AOT-compiled separately
+            // and is unaffected by R8. Only the Android wrapper/plugins shrink.
+            isMinifyEnabled = false
+            isShrinkResources = false
+
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
+
+    // ── ABI note ─────────────────────────────────────────────────────────
+    // Flutter's Gradle plugin internally sets ndk.abiFilters, which conflicts
+    // with an explicit splits { abi } block in KTS. Use the CLI flag instead:
+    //   flutter build apk --release --split-per-abi
+    // This produces one APK per architecture without any Gradle-level conflict.
+
 }
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
 }

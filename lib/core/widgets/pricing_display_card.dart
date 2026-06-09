@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import '../data/pricing_slabs.dart';
 import '../models/pricing_result.dart';
 import '../services/pricing_engine.dart';
+import '../utils/transport_icon_mapper.dart';
 
 class PricingDisplayCard extends StatefulWidget {
   final PricingResult? pricing;
@@ -96,7 +97,7 @@ class _PricingDisplayCardState extends State<PricingDisplayCard>
         border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFFF27F0D).withValues(alpha: 0.08),
+            color: const Color(0xFFF05A4F).withValues(alpha: 0.08),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -135,7 +136,7 @@ class _PricingDisplayCardState extends State<PricingDisplayCard>
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: [Color(0xFFFFF7ED), Color(0xFFFFFBF5)],
+          colors: [Color(0xFFFDE8E7), Color(0xFFFFFBF5)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -240,12 +241,12 @@ class _PricingDisplayCardState extends State<PricingDisplayCard>
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 decoration: BoxDecoration(
                   color: isSelected
-                      ? const Color(0xFFF27F0D).withValues(alpha: 0.1)
+                      ? const Color(0xFFF05A4F).withValues(alpha: 0.1)
                       : const Color(0xFFF8FAFC),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
                     color: isSelected
-                        ? const Color(0xFFF27F0D)
+                        ? const Color(0xFFF05A4F)
                         : const Color(0xFFE2E8F0),
                     width: isSelected ? 2 : 1,
                   ),
@@ -257,7 +258,7 @@ class _PricingDisplayCardState extends State<PricingDisplayCard>
                       height: 32,
                       decoration: BoxDecoration(
                         color: isSelected
-                            ? const Color(0xFFF27F0D)
+                            ? const Color(0xFFF05A4F)
                             : const Color(0xFFE2E8F0),
                         shape: BoxShape.circle,
                       ),
@@ -280,7 +281,7 @@ class _PricingDisplayCardState extends State<PricingDisplayCard>
                         fontSize: 11,
                         fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
                         color: isSelected
-                            ? const Color(0xFFF27F0D)
+                            ? const Color(0xFFF05A4F)
                             : const Color(0xFF64748B),
                       ),
                     ),
@@ -444,7 +445,7 @@ class _PricingDisplayCardState extends State<PricingDisplayCard>
                     fontFamily: 'Plus Jakarta Sans',
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
-                    color: Color(0xFFF27F0D),
+                    color: Color(0xFFF05A4F),
                   ),
                 ),
                 const SizedBox(width: 4),
@@ -454,7 +455,7 @@ class _PricingDisplayCardState extends State<PricingDisplayCard>
                   child: const Icon(
                     Icons.keyboard_arrow_down,
                     size: 18,
-                    color: Color(0xFFF27F0D),
+                    color: Color(0xFFF05A4F),
                   ),
                 ),
               ],
@@ -492,13 +493,13 @@ class _PricingDisplayCardState extends State<PricingDisplayCard>
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: const Color(0xFFFFF7ED),
+              color: const Color(0xFFFDE8E7),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.info_outline, size: 14, color: Color(0xFFF27F0D)),
+                const Icon(Icons.info_outline, size: 14, color: Color(0xFFF05A4F)),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -568,7 +569,7 @@ class _PricingDisplayCardState extends State<PricingDisplayCard>
             height: 32,
             child: CircularProgressIndicator(
               strokeWidth: 3,
-              color: Color(0xFFF27F0D),
+              color: Color(0xFFF05A4F),
             ),
           ),
           const SizedBox(height: 12),
@@ -599,13 +600,7 @@ class _PricingDisplayCardState extends State<PricingDisplayCard>
   }
 
   IconData _modeIcon(String mode) {
-    switch (mode.toLowerCase()) {
-      case 'flight': return Icons.flight;
-      case 'train': return Icons.train;
-      case 'bus': return Icons.directions_bus;
-      case 'bike': return Icons.two_wheeler;
-      default: return Icons.directions_car;
-    }
+    return TransportIconMapper.getIconForMode(mode);
   }
 }
 

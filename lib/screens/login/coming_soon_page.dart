@@ -38,7 +38,7 @@ class ComingSoonPage extends StatelessWidget {
                   children: [
                     const Icon(
                       Icons.construction,
-                      color: Color(0xFFF27F0D),
+                      color: Color(0xFFF05A4F),
                       size: 80,
                     ),
                     const SizedBox(height: 24),
@@ -64,7 +64,7 @@ class ComingSoonPage extends StatelessWidget {
                     const SizedBox(height: 40),
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFF27F0D),
+                        backgroundColor: const Color(0xFFF05A4F),
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
                         shape: RoundedRectangleBorder(

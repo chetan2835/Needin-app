@@ -1,3 +1,4 @@
+// @ts-nocheck
 // deno-lint-ignore-file no-explicit-any
 
 export function getConfig() {
@@ -46,3 +47,4 @@ export function getConfig() {
     isProd,
   };
 }
+

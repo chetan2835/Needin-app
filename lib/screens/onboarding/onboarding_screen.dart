@@ -69,7 +69,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               child: TextButton(
                 onPressed: finishOnboarding,
                 child: const Text("Skip",
-                    style: TextStyle(color: Color(0xfff27f0d))),
+                    style: TextStyle(color: Color(0xFFF05A4F))),
               ),
             ),
 
@@ -122,7 +122,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         width: pageIndex == index ? 24 : 8,
                         decoration: BoxDecoration(
                           color: pageIndex == index
-                              ? const Color(0xfff27f0d)
+                              ? const Color(0xFFF05A4F)
                               : Colors.grey[300],
                           borderRadius: BorderRadius.circular(20),
                         ),
@@ -139,7 +139,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 height: 55,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xfff27f0d),
+                    backgroundColor: const Color(0xFFF05A4F),
                   ),
                   onPressed: () {
 

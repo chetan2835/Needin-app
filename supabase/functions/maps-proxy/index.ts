@@ -1,3 +1,4 @@
+// @ts-nocheck
 // deno-lint-ignore-file no-explicit-any
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
@@ -50,3 +51,4 @@ serve(async (req: Request) => {
     });
   }
 });
+

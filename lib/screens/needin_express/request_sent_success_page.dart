@@ -30,7 +30,7 @@ class RequestSentSuccessPage extends StatelessWidget {
                       ),
                       const SizedBox(height: 32),
                       const Text(
-                        "Request Sent Successfully",
+                        "Booking Sent Successfully",
                         style: TextStyle(
                           fontFamily: "Inter",
                           fontSize: 28,
@@ -41,7 +41,7 @@ class RequestSentSuccessPage extends StatelessWidget {
                       ),
                       const SizedBox(height: 16),
                       const Text(
-                        "Your delivery request has been forwarded to the traveler. You will be notified once they accept it.",
+                        "Your booking request has been forwarded to the traveler. You will be notified once they accept it.",
                         style: TextStyle(
                           fontFamily: "Inter",
                           fontSize: 16,
@@ -59,7 +59,7 @@ class RequestSentSuccessPage extends StatelessWidget {
               padding: const EdgeInsets.all(24),
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFF8000),
+                  backgroundColor: const Color(0xFFF05A4F),
                   foregroundColor: Colors.white,
                   minimumSize: const Size(double.infinity, 56),
                   shape: RoundedRectangleBorder(

@@ -89,11 +89,11 @@ class VerificationFailedScreen extends StatelessWidget {
                   height: 56,
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFF27F0D),
+                      backgroundColor: const Color(0xFFF05A4F),
                       foregroundColor: Colors.white,
                       elevation: 8,
                       shadowColor:
-                          const Color(0xFFF27F0D).withValues(alpha: 0.4),
+                          const Color(0xFFF05A4F).withValues(alpha: 0.4),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),

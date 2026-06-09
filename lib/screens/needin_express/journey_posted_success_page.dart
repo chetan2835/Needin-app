@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'dart:math';
+import '../../core/constants/ui_utils.dart';
+import '../../core/utils/travel_mode_mapper.dart';
 import 'post_journey_page.dart';
 import 'my_journeys_page.dart';
+import 'express_dashboard_page.dart';
 
 class JourneyPostedSuccessPage extends StatefulWidget {
   final Map<String, dynamic> journeyData;
@@ -66,6 +69,15 @@ class _JourneyPostedSuccessPageState extends State<JourneyPostedSuccessPage>
     super.dispose();
   }
 
+  // Navigate back to the Express Dashboard (the correct root for this flow).
+  void _goToDashboard() {
+    // Pop to the app root (ServiceSelectionPage) and push the dashboard
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const ExpressDashboardPage()),
+      (route) => route.isFirst,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final origin = widget.journeyData['origin'] ?? 'Origin';
@@ -75,16 +87,15 @@ class _JourneyPostedSuccessPageState extends State<JourneyPostedSuccessPage>
 
     String formattedTime = '';
     if (departureTime != null) {
-      try {
-        final dt = DateTime.parse(departureTime.toString());
-        final months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-        formattedTime = "${months[dt.month - 1]} ${dt.day}, ${dt.year}";
-      } catch (_) {
-        formattedTime = departureTime.toString();
-      }
+      formattedTime = UIUtils.formatJourneyDateTime(departureTime.toString());
     }
 
-    return Scaffold(
+    return PopScope(
+      canPop: false, // Intercept all back gestures
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) _goToDashboard();
+      },
+      child: Scaffold(
       backgroundColor: const Color(0xFFFAFAFA),
       body: SafeArea(
         child: Stack(
@@ -114,7 +125,7 @@ class _JourneyPostedSuccessPageState extends State<JourneyPostedSuccessPage>
                           child: Stack(
                             alignment: Alignment.center,
                             children: [
-                              Container(width: 140, height: 140, decoration: BoxDecoration(shape: BoxShape.circle, color: const Color(0xFFF27F0D).withValues(alpha: 0.1))),
+                              Container(width: 140, height: 140, decoration: BoxDecoration(shape: BoxShape.circle, color: const Color(0xFF16A34A).withValues(alpha: 0.1))),
                               Container(
                                 width: 100,
                                 height: 100,
@@ -124,7 +135,7 @@ class _JourneyPostedSuccessPageState extends State<JourneyPostedSuccessPage>
                                   boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 15, offset: const Offset(0, 4))],
                                   border: Border.all(color: const Color(0xFFFAFAFA), width: 4),
                                 ),
-                                child: const Center(child: Icon(Icons.check_circle, color: Color(0xFFF27F0D), size: 60)),
+                                child: const Center(child: Icon(Icons.check_circle, color: Color(0xFF16A34A), size: 60)),
                               ),
                             ],
                           ),
@@ -172,7 +183,7 @@ class _JourneyPostedSuccessPageState extends State<JourneyPostedSuccessPage>
                             runSpacing: 8,
                             alignment: WrapAlignment.center,
                             children: [
-                              _buildInfoChip(Icons.directions_car, travelMode),
+                              _buildInfoChip(TravelModeMapper.getIcon(travelMode), TravelModeMapper.getLabel(travelMode)),
                               if (formattedTime.isNotEmpty) _buildInfoChip(Icons.calendar_today, formattedTime),
                               if (widget.journeyData['distance_km'] != null)
                                 _buildInfoChip(Icons.straighten, "${(widget.journeyData['distance_km'] as num).toStringAsFixed(0)} km"),
@@ -188,22 +199,32 @@ class _JourneyPostedSuccessPageState extends State<JourneyPostedSuccessPage>
                 FadeTransition(
                   opacity: _buttonFade,
                   child: Padding(
-                    padding: const EdgeInsets.all(24),
+                    padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
                     child: Column(
                       children: [
                         ElevatedButton(
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFF27F0D),
+                            backgroundColor: const Color(0xFF16A34A),
                             foregroundColor: Colors.white,
-                            minimumSize: const Size(double.infinity, 56),
+                            minimumSize: const Size(double.infinity, 52),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                             elevation: 6,
-                            shadowColor: const Color(0xFFF27F0D).withValues(alpha: 0.4),
+                            shadowColor: const Color(0xFF16A34A).withValues(alpha: 0.4),
                           ),
                           onPressed: () {
+                            // Pop to root (ServiceSelectionPage) to preserve app structure,
+                            // push the Dashboard so it's in the back-stack,
+                            // then push MyJourneysPage on top.
                             Navigator.of(context).pushAndRemoveUntil(
-                              MaterialPageRoute(builder: (_) => const MyJourneysPage()),
+                              MaterialPageRoute(
+                                builder: (_) => const ExpressDashboardPage(),
+                              ),
                               (route) => route.isFirst,
+                            );
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const MyJourneysPage(),
+                              ),
                             );
                           },
                           child: Row(mainAxisAlignment: MainAxisAlignment.center, children: const [
@@ -212,18 +233,27 @@ class _JourneyPostedSuccessPageState extends State<JourneyPostedSuccessPage>
                             Icon(Icons.arrow_forward),
                           ]),
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 12),
                         OutlinedButton(
                           style: OutlinedButton.styleFrom(
                             foregroundColor: const Color(0xFF475569),
-                            minimumSize: const Size(double.infinity, 56),
+                            minimumSize: const Size(double.infinity, 52),
                             side: const BorderSide(color: Color(0xFFE2E8F0), width: 2),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                           ),
                           onPressed: () {
+                            // Pop to root (ServiceSelectionPage), push Dashboard,
+                            // then push PostJourneyPage.
                             Navigator.of(context).pushAndRemoveUntil(
-                              MaterialPageRoute(builder: (_) => const PostJourneyPage()),
+                              MaterialPageRoute(
+                                builder: (_) => const ExpressDashboardPage(),
+                              ),
                               (route) => route.isFirst,
+                            );
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const PostJourneyPage(),
+                              ),
                             );
                           },
                           child: Row(mainAxisAlignment: MainAxisAlignment.center, children: const [
@@ -232,7 +262,6 @@ class _JourneyPostedSuccessPageState extends State<JourneyPostedSuccessPage>
                             Text("Post Another Journey", style: TextStyle(fontFamily: "Plus Jakarta Sans", fontSize: 16, fontWeight: FontWeight.bold)),
                           ]),
                         ),
-                        const SizedBox(height: 24),
                       ],
                     ),
                   ),
@@ -242,7 +271,8 @@ class _JourneyPostedSuccessPageState extends State<JourneyPostedSuccessPage>
           ],
         ),
       ),
-    );
+      ), // close child: Scaffold
+    ); // end PopScope
   }
 
   Widget _buildInfoChip(IconData icon, String label) {
@@ -255,7 +285,7 @@ class _JourneyPostedSuccessPageState extends State<JourneyPostedSuccessPage>
         boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 4)],
       ),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, size: 14, color: const Color(0xFFF27F0D)),
+        Icon(icon, size: 14, color: const Color(0xFF16A34A)),
         const SizedBox(width: 6),
         Text(label, style: const TextStyle(fontFamily: "Plus Jakarta Sans", fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF475569))),
       ]),
@@ -271,10 +301,10 @@ class _AnimatedConfettiPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final rand = Random(42);
     final colors = [
-      const Color(0xFFF27F0D),
-      const Color(0xFFFCD34D),
-      const Color(0xFFF27F0D).withValues(alpha: 0.6),
-      const Color(0xFFFFB347),
+      const Color(0xFF16A34A),
+      const Color(0xFF15803D),
+      const Color(0xFF16A34A).withValues(alpha: 0.6),
+      const Color(0xFF22C55E),
     ];
 
     for (int i = 0; i < 50; i++) {

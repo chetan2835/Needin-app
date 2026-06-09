@@ -1,19 +1,24 @@
 // ══════════════════════════════════════════════════════════════
-//  NEEDIN EXPRESS — Local Pricing Engine v3.0
+//  NEEDIN EXPRESS — Local Pricing Engine v4.0
 //  ⚠️ OFFLINE FALLBACK ONLY — Backend is the source of truth
 //
 //  Used ONLY when the Edge Function is unreachable.
 //  Mirrors the exact same logic and slab data as the backend.
+//
+//  v4 changes:
+//  - Time delay tiers: 30% (not 60%)
+//  - Same city: 15 km (not 50 km)
+//  - Flight: supports large parcel (₹949)
 // ══════════════════════════════════════════════════════════════
 
 import '../data/pricing_slabs.dart';
 import '../models/pricing_result.dart';
 
-/// Time performance tiers
+/// Time performance tiers (ETR-based)
 /// Under Time = within ETR (Time₁ + 10% grace)
-/// Delay ≤60% = × 0.85
-/// Delay > 60% = × 0.75
-enum TimePerformance { underTime, delayUpTo60, delayAbove60 }
+/// Delay ≤30% beyond ETR → × 0.85
+/// Delay >30% beyond ETR → × 0.75
+enum TimePerformance { underTime, delayUpTo30, delayAbove30 }
 
 /// Travel mode
 enum TravelMode { bike, car, train, bus, flight }
@@ -50,15 +55,15 @@ class PricingEngine {
     //  PRIORITY 1: FLIGHT OVERRIDE
     // ═══════════════════════════════════════════════
     if (travelMode == TravelMode.flight) {
-      final flightSize = _mapToFlightSize(parcelSize);
-      final price = FlightPricing.getPrice(flightSize);
+      final sizeStr = _sizeStr(parcelSize);
+      final price = FlightPricing.getPrice(sizeStr);
 
       return PricingResult(
         price: price,
         distanceKm: distanceKm,
         duration: durationText,
         pricingType: PricingType.flight,
-        parcelSizeLabel: flightSize,
+        parcelSizeLabel: sizeStr,
         travelModeLabel: 'flight',
         etrSeconds: etrSeconds,
         etrText: etrText,
@@ -68,8 +73,8 @@ class PricingEngine {
           timeMultiplier: 1.0,
           timePerformanceLabel: 'N/A',
           routeType: 'flight',
-          finalReason: 'Flight override — fixed ₹$price for $flightSize parcel',
-          flightCategory: flightSize,
+          finalReason: 'Flight override — fixed ₹$price for $sizeStr parcel',
+          flightCategory: sizeStr,
         ),
       );
     }
@@ -78,8 +83,7 @@ class PricingEngine {
     //  PRIORITY 2: SAME CITY FIXED PRICING
     // ═══════════════════════════════════════════════
     if (isSameCity) {
-      final sizeStr = parcelSize == ParcelSize.small ? 'small'
-          : parcelSize == ParcelSize.medium ? 'medium' : 'large';
+      final sizeStr = _sizeStr(parcelSize);
       final price = SameCityPricing.getPrice(sizeStr, timePerformance);
       final perfLabel = _perfLabel(timePerformance);
 
@@ -94,7 +98,7 @@ class PricingEngine {
         etrText: etrText,
         breakdown: PricingBreakdown(
           basePrice: 49,
-          slabRange: 'Same City (0–50 km)',
+          slabRange: 'Same City (≤15 km)',
           timeMultiplier: timeMultiplier,
           timePerformanceLabel: perfLabel,
           routeType: 'same_city',
@@ -107,6 +111,14 @@ class PricingEngine {
     //  PRIORITY 3: CITY-TO-CITY SLAB PRICING
     // ═══════════════════════════════════════════════
     final km = distanceKm.ceil();
+
+    // Enforce 3000 km max
+    if (km > 3000) {
+      return PricingResult.error(
+        'Route distance ${distanceKm.toStringAsFixed(1)} km exceeds the maximum supported distance of 3000 km.',
+      );
+    }
+
     final slabs = CityToCitySlabs.getSlabs(parcelSize);
     final slab = CityToCitySlabs.findSlab(slabs, km);
 
@@ -116,8 +128,7 @@ class PricingEngine {
 
     final price = _getSlabPrice(slab, timePerformance);
     final slabLabel = '${slab.minKm}–${slab.maxKm} km';
-    final sizeStr = parcelSize == ParcelSize.small ? 'small'
-        : parcelSize == ParcelSize.medium ? 'medium' : 'large';
+    final sizeStr = _sizeStr(parcelSize);
     final perfLabel = _perfLabel(timePerformance);
 
     return PricingResult(
@@ -141,39 +152,38 @@ class PricingEngine {
   }
 
   // ──────────────────────────────────────────────────
-  //  SAME CITY DETECTION
+  //  SAME CITY DETECTION — 15 km threshold
   // ──────────────────────────────────────────────────
 
   static bool detectSameCity(double distanceKm, {String? originCity, String? destCity}) {
-    // Method 1: City name match
-    if (originCity != null && destCity != null) {
-      final normO = originCity.toLowerCase().trim();
-      final normD = destCity.toLowerCase().trim();
-      if (normO == normD) return true;
-      if (normO.contains(normD) || normD.contains(normO)) return true;
-    }
-
-    // Method 2: Distance threshold
-    return distanceKm <= 50;
+    return distanceKm <= SameCityPricing.thresholdKm;
   }
 
   // ──────────────────────────────────────────────────
   //  HELPERS
   // ──────────────────────────────────────────────────
 
+  static String _sizeStr(ParcelSize size) {
+    switch (size) {
+      case ParcelSize.small: return 'small';
+      case ParcelSize.medium: return 'medium';
+      case ParcelSize.large: return 'large';
+    }
+  }
+
   static double _timeMultiplier(TimePerformance perf) {
     switch (perf) {
       case TimePerformance.underTime: return 1.0;
-      case TimePerformance.delayUpTo60: return 0.85;
-      case TimePerformance.delayAbove60: return 0.75;
+      case TimePerformance.delayUpTo30: return 0.85;
+      case TimePerformance.delayAbove30: return 0.75;
     }
   }
 
   static String _perfLabel(TimePerformance perf) {
     switch (perf) {
       case TimePerformance.underTime: return 'Under Time (within ETR + 10%)';
-      case TimePerformance.delayUpTo60: return 'Delay ≤60% beyond ETR';
-      case TimePerformance.delayAbove60: return 'Delay >60% beyond ETR';
+      case TimePerformance.delayUpTo30: return 'Delay ≤30% beyond ETR';
+      case TimePerformance.delayAbove30: return 'Delay >30% beyond ETR';
     }
   }
 
@@ -187,19 +197,11 @@ class PricingEngine {
     }
   }
 
-  static String _mapToFlightSize(ParcelSize size) {
-    switch (size) {
-      case ParcelSize.small: return 'small';
-      case ParcelSize.medium: return 'medium';
-      case ParcelSize.large: return 'medium'; // Max for flight
-    }
-  }
-
   static int _getSlabPrice(SlabEntry slab, TimePerformance perf) {
     switch (perf) {
       case TimePerformance.underTime: return slab.underTime;
-      case TimePerformance.delayUpTo60: return slab.delay60;
-      case TimePerformance.delayAbove60: return slab.delayAbove60;
+      case TimePerformance.delayUpTo30: return slab.delay30;
+      case TimePerformance.delayAbove30: return slab.delayAbove30;
     }
   }
 }

@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/services/digilocker_service.dart';
+import '../../core/services/local_storage_service.dart';
+import '../../core/services/supabase_service.dart';
+import '../../core/services/auth_service.dart';
+import '../login/service_selection_page.dart';
 
 /// Identity Verification entry screen.
 /// Opens real DigiLocker OAuth2 in external browser — zero fake UI.
@@ -87,6 +91,36 @@ class _IdentityVerificationPageState extends State<IdentityVerificationPage>
     );
   }
 
+  Future<void> _handleSkipForNow() async {
+    // 1. Mark profile as completed locally
+    await LocalStorageService.setProfileCompleted();
+
+    // 2. Persist skip status to Supabase
+    final uid = AuthService().currentUser?.uid;
+    if (uid != null) {
+      try {
+        await SupabaseService().client
+            .from('profiles')
+            .update({
+          'is_profile_complete': true,
+          'identity_verification_status': 'skipped',
+          'updated_at': DateTime.now().toIso8601String(),
+        }).eq('id', uid);
+      } catch (e) {
+        debugPrint('Skip verification DB update failed: $e');
+      }
+    }
+
+    // 3. Navigate directly to Needin Home Screen — clear entire stack
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(
+        builder: (_) => const ServiceSelectionPage(),
+      ),
+      (route) => false,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -126,47 +160,65 @@ class _IdentityVerificationPageState extends State<IdentityVerificationPage>
               ),
               child: SafeArea(
                 top: false,
-                child: SizedBox(
-                  width: double.infinity,
-                  height: 56,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFF27F0D),
-                      foregroundColor: Colors.white,
-                      elevation: 8,
-                      shadowColor:
-                          const Color(0xFFF27F0D).withValues(alpha: 0.4),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: double.infinity,
+                      height: 56,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFF05A4F),
+                          foregroundColor: Colors.white,
+                          elevation: 8,
+                          shadowColor:
+                              const Color(0xFFF05A4F).withValues(alpha: 0.4),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        onPressed: _isLoading ? null : _startVerification,
+                        child: _isLoading
+                            ? const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.verified_user,
+                                      size: 20, color: Colors.white),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    "Verify with DigiLocker",
+                                    style: TextStyle(
+                                      fontFamily: "Plus Jakarta Sans",
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
                       ),
                     ),
-                    onPressed: _isLoading ? null : _startVerification,
-                    child: _isLoading
-                        ? const SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(
-                              color: Colors.white,
-                              strokeWidth: 2,
-                            ),
-                          )
-                        : const Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.verified_user,
-                                  size: 20, color: Colors.white),
-                              SizedBox(width: 8),
-                              Text(
-                                "Verify with DigiLocker",
-                                style: TextStyle(
-                                  fontFamily: "Plus Jakarta Sans",
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
-                  ),
+                    const SizedBox(height: 8),
+                    TextButton(
+                      onPressed: _handleSkipForNow,
+                      child: const Text(
+                        "Skip for now",
+                        style: TextStyle(
+                          fontFamily: "Plus Jakarta Sans",
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -180,13 +232,13 @@ class _IdentityVerificationPageState extends State<IdentityVerificationPage>
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFFFEF3C7), // amber-100
+        color: const Color(0xFFFFF5F4), // coral-50
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFFDE68A)), // amber-200
+        border: Border.all(color: const Color(0xFFFDE8E7)), // coral-100
       ),
       child: const Row(
         children: [
-          Icon(Icons.info_outline, color: Color(0xFFD97706), size: 20),
+          Icon(Icons.info_outline, color: Color(0xFFF05A4F), size: 20),
           SizedBox(width: 12),
           Expanded(
             child: Text(
@@ -195,7 +247,7 @@ class _IdentityVerificationPageState extends State<IdentityVerificationPage>
                 fontFamily: "Plus Jakarta Sans",
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
-                color: Color(0xFF92400E), // amber-800
+                color: Color(0xFFC44840), // coral-800
               ),
             ),
           ),
@@ -264,7 +316,7 @@ class _IdentityVerificationPageState extends State<IdentityVerificationPage>
               height: 56,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFF27F0D),
+                  backgroundColor: const Color(0xFFF05A4F),
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -308,15 +360,15 @@ class _IdentityVerificationPageState extends State<IdentityVerificationPage>
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  const Color(0xFFF27F0D).withValues(alpha: 0.15),
-                  const Color(0xFFF27F0D).withValues(alpha: 0.05),
+                  const Color(0xFFF05A4F).withValues(alpha: 0.15),
+                  const Color(0xFFF05A4F).withValues(alpha: 0.05),
                 ],
               ),
               shape: BoxShape.circle,
             ),
             child: const Icon(
               Icons.shield,
-              color: Color(0xFFF27F0D),
+              color: Color(0xFFF05A4F),
               size: 48,
             ),
           ),
@@ -433,10 +485,10 @@ class _IdentityVerificationPageState extends State<IdentityVerificationPage>
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: const Color(0xFFF27F0D).withValues(alpha: 0.1),
+              color: const Color(0xFFF05A4F).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(icon, color: const Color(0xFFF27F0D), size: 24),
+            child: Icon(icon, color: const Color(0xFFF05A4F), size: 24),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -476,7 +528,7 @@ class _IdentityVerificationPageState extends State<IdentityVerificationPage>
           width: 28,
           height: 28,
           decoration: BoxDecoration(
-            color: const Color(0xFFF27F0D).withValues(alpha: 0.1),
+            color: const Color(0xFFF05A4F).withValues(alpha: 0.1),
             shape: BoxShape.circle,
           ),
           child: Center(
@@ -486,7 +538,7 @@ class _IdentityVerificationPageState extends State<IdentityVerificationPage>
                 fontFamily: "Plus Jakarta Sans",
                 fontSize: 12,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFFF27F0D),
+                color: Color(0xFFF05A4F),
               ),
             ),
           ),

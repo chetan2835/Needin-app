@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/services/local_storage_service.dart';
 import 'onboarding3.dart';
 import '../login/login_page.dart';
 import '../../core/widgets/fade_slide_in.dart';
@@ -9,20 +10,23 @@ class Onboarding2 extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFF8F7F5),
       body: SafeArea(
         child: Column(
           children: [
-            /// Skip Button
+            /// Skip Header
             Padding(
-              padding: const EdgeInsets.only(top: 24.0, right: 24.0, bottom: 8.0),
+              padding: const EdgeInsets.only(top: 24.0, right: 24.0),
               child: Align(
                 alignment: Alignment.topRight,
                 child: GestureDetector(
-                  onTap: () {
-                    Navigator.pushReplacement(context,
-                        MaterialPageRoute(
-                            builder: (_) => LoginPage()));
+                  onTap: () async {
+                    await LocalStorageService.setOnboardingComplete();
+                    if (context.mounted) {
+                      Navigator.pushAndRemoveUntil(context,
+                          MaterialPageRoute(builder: (_) => const LoginPage()),
+                          (route) => false);
+                    }
                   },
                   child: const Text(
                     "Skip",
@@ -121,11 +125,11 @@ class Onboarding2 extends StatelessWidget {
                         height: 8,
                         width: 32,
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF27F0D), // primary
+                          color: const Color(0xFFF05A4F), // primary
                           borderRadius: BorderRadius.circular(20),
                           boxShadow: [
                             BoxShadow(
-                              color: Color(0xFFF27F0D).withValues(alpha: 0.3),
+                              color: Color(0xFFF05A4F).withValues(alpha: 0.3),
                               blurRadius: 2,
                             ),
                           ],
@@ -160,10 +164,10 @@ class Onboarding2 extends StatelessWidget {
                     height: 56,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFF27F0D),
+                        backgroundColor: const Color(0xFFF05A4F),
                         foregroundColor: Colors.white,
                         elevation: 8,
-                        shadowColor: Color(0xFFF27F0D).withValues(alpha: 0.25),
+                        shadowColor: Color(0xFFF05A4F).withValues(alpha: 0.25),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12), // xl
                         ),

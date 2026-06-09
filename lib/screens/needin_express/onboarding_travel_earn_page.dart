@@ -52,7 +52,7 @@ class OnboardingTravelEarnPage extends StatelessWidget {
                         child: Icon(
                           Icons.flight_takeoff,
                           size: 100,
-                          color: const Color(0xFFFF8000).withValues(alpha: 0.8),
+                          color: const Color(0xFFF05A4F).withValues(alpha: 0.8),
                         ),
                       ),
                     ),
@@ -90,7 +90,7 @@ class OnboardingTravelEarnPage extends StatelessWidget {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Container(width: 24, height: 6, decoration: BoxDecoration(color: const Color(0xFFFF8000), borderRadius: BorderRadius.circular(9999))),
+                      Container(width: 24, height: 6, decoration: BoxDecoration(color: const Color(0xFFF05A4F), borderRadius: BorderRadius.circular(9999))),
                       const SizedBox(width: 8),
                       Container(width: 6, height: 6, decoration: BoxDecoration(color: const Color(0xFFE7E0DA), borderRadius: BorderRadius.circular(9999))),
                       const SizedBox(width: 8),
@@ -100,7 +100,7 @@ class OnboardingTravelEarnPage extends StatelessWidget {
                   const SizedBox(height: 32),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFFF8000), // primary
+                      backgroundColor: const Color(0xFFF05A4F), // primary
                       foregroundColor: Colors.white,
                       minimumSize: const Size(double.infinity, 56),
                       elevation: 0,

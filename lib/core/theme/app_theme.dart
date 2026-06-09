@@ -2,7 +2,12 @@ import 'package:flutter/material.dart';
 
 class AppTheme {
 
-  static const primaryColor = Color(0xFFF27F0D);
+  // Main primary: 0xFFF05A4F (#F05A4F)
+  // Dark/pressed: 0xFFC44840 (#C44840)
+  // Light/hover: 0xFFF37A72 (#F37A72)
+  // Subtle tint: 0xFFFDE8E7 (#FDE8E7)
+  // Lightest surface: 0xFFFFF5F4 (#FFF5F4)
+  static const primaryColor = Color(0xFFF05A4F);
   static const secondaryColor = Color(0xFF1E293B);
 
   static ThemeData lightTheme = ThemeData(

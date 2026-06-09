@@ -3,7 +3,7 @@
 -- ============================================================
 CREATE TABLE IF NOT EXISTS public.digilocker_sessions (
   id           UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id      TEXT        NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  user_id      UUID        NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   state        TEXT        NOT NULL UNIQUE,
   code_verifier TEXT       NOT NULL,
   expires_at   TIMESTAMPTZ NOT NULL,

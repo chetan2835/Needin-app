@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
-import 'parcel_size_selection_page.dart';
+import 'additional_notes_page.dart';
+import 'package:provider/provider.dart';
+import '../../core/providers/journey_draft_provider.dart';
+
 
 class FlexibilityOptionsPage extends StatefulWidget {
   final Map<String, dynamic> journeyData;
@@ -16,14 +19,17 @@ class _FlexibilityOptionsPageState extends State<FlexibilityOptionsPage> {
   final bool _isLoading = false;
 
   Future<void> _submitJourney() async {
-    final finalJourneyData = Map<String, dynamic>.from(widget.journeyData);
-    
-    finalJourneyData['pickup_flexibility'] = _pickupFlexibility;
-    finalJourneyData['dropoff_flexibility'] = _dropoffFlexibility;
+    final provider = Provider.of<JourneyDraftProvider>(context, listen: false);
 
-    Navigator.push(context,
+    provider.updateData({
+      'pickup_flexibility': _pickupFlexibility,
+      'dropoff_flexibility': _dropoffFlexibility,
+    });
+
+    Navigator.push(
+      context,
       MaterialPageRoute(
-        builder: (_) => ParcelSizeSelectionPage(journeyData: finalJourneyData),
+        builder: (_) => AdditionalNotesPage(journeyData: provider.draftData),
       ),
     );
   }
@@ -51,7 +57,10 @@ class _FlexibilityOptionsPageState extends State<FlexibilityOptionsPage> {
                       width: 40,
                       height: 40,
                       color: Colors.transparent,
-                      child: const Icon(Icons.arrow_back, color: Color(0xFF0F172A)),
+                      child: const Icon(
+                        Icons.arrow_back,
+                        color: Color(0xFF0F172A),
+                      ),
                     ),
                   ),
                   const Expanded(
@@ -85,7 +94,7 @@ class _FlexibilityOptionsPageState extends State<FlexibilityOptionsPage> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: const [
                         Text(
-                          "Step 7 of 11",
+                          "Step 5 of 7",
                           style: TextStyle(
                             fontFamily: "Plus Jakarta Sans",
                             fontSize: 12,
@@ -94,14 +103,14 @@ class _FlexibilityOptionsPageState extends State<FlexibilityOptionsPage> {
                           ),
                         ),
                         Text(
-                          "63%",
+                          "71%",
                           style: TextStyle(
                             fontFamily: "Plus Jakarta Sans",
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
-                            color: Color(0xFFF27F0D),
+                            color: Color(0xFF22C55E),
                           ),
-                        )
+                        ),
                       ],
                     ),
                     const SizedBox(height: 8),
@@ -114,10 +123,10 @@ class _FlexibilityOptionsPageState extends State<FlexibilityOptionsPage> {
                       ),
                       child: FractionallySizedBox(
                         alignment: Alignment.centerLeft,
-                        widthFactor: 0.63,
+                        widthFactor: 0.71,
                         child: Container(
                           decoration: BoxDecoration(
-                            color: const Color(0xFFF27F0D),
+                            color: const Color(0xFF22C55E),
                             borderRadius: BorderRadius.circular(3),
                           ),
                         ),
@@ -139,7 +148,11 @@ class _FlexibilityOptionsPageState extends State<FlexibilityOptionsPage> {
                     /// Pickup Section
                     Row(
                       children: const [
-                        Icon(Icons.inventory_2, color: Color(0xFFF27F0D), size: 20),
+                        Icon(
+                          Icons.inventory_2,
+                          color: Color(0xFFF05A4F),
+                          size: 20,
+                        ),
                         SizedBox(width: 8),
                         Text(
                           "Pickup Flexibility",
@@ -155,20 +168,24 @@ class _FlexibilityOptionsPageState extends State<FlexibilityOptionsPage> {
                     const SizedBox(height: 16),
                     _buildRadioCard(
                       title: "Fixed Location",
-                      subtitle: "I can only pick up at the exact address specified.",
+                      subtitle:
+                          "I can only pick up at the exact address specified.",
                       icon: Icons.location_on,
                       groupValue: _pickupFlexibility,
                       value: "Fixed Location",
-                      onChanged: (val) => setState(() => _pickupFlexibility = val!),
+                      onChanged: (val) =>
+                          setState(() => _pickupFlexibility = val!),
                     ),
                     const SizedBox(height: 12),
                     _buildRadioCard(
                       title: "Nearby Area",
-                      subtitle: "I am willing to travel within 5km for pickup.",
+                      subtitle:
+                          "I am willing to travel nearby radius for pickup.",
                       icon: Icons.near_me,
                       groupValue: _pickupFlexibility,
                       value: "Nearby Area",
-                      onChanged: (val) => setState(() => _pickupFlexibility = val!),
+                      onChanged: (val) =>
+                          setState(() => _pickupFlexibility = val!),
                     ),
 
                     const SizedBox(height: 32),
@@ -176,7 +193,11 @@ class _FlexibilityOptionsPageState extends State<FlexibilityOptionsPage> {
                     /// Drop-off Section
                     Row(
                       children: const [
-                        Icon(Icons.local_shipping, color: Color(0xFFF27F0D), size: 20),
+                        Icon(
+                          Icons.local_shipping,
+                          color: Color(0xFFF05A4F),
+                          size: 20,
+                        ),
                         SizedBox(width: 8),
                         Text(
                           "Drop-off Flexibility",
@@ -192,20 +213,24 @@ class _FlexibilityOptionsPageState extends State<FlexibilityOptionsPage> {
                     const SizedBox(height: 16),
                     _buildRadioCard(
                       title: "Fixed Location",
-                      subtitle: "I can only drop off at the exact address specified.",
+                      subtitle:
+                          "I can only drop off at the exact address specified.",
                       icon: Icons.pin_drop,
                       groupValue: _dropoffFlexibility,
                       value: "Fixed Location",
-                      onChanged: (val) => setState(() => _dropoffFlexibility = val!),
+                      onChanged: (val) =>
+                          setState(() => _dropoffFlexibility = val!),
                     ),
                     const SizedBox(height: 12),
                     _buildRadioCard(
                       title: "Nearby Area",
-                      subtitle: "I am willing to travel within 5km for drop-off.",
+                      subtitle:
+                          "I am willing to travel nearby radius for drop-off.",
                       icon: Icons.explore,
                       groupValue: _dropoffFlexibility,
                       value: "Nearby Area",
-                      onChanged: (val) => setState(() => _dropoffFlexibility = val!),
+                      onChanged: (val) =>
+                          setState(() => _dropoffFlexibility = val!),
                     ),
 
                     const SizedBox(height: 100), // padding buffer
@@ -227,32 +252,32 @@ class _FlexibilityOptionsPageState extends State<FlexibilityOptionsPage> {
           width: double.infinity,
           child: ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFF27F0D),
+              backgroundColor: const Color(0xFFF05A4F),
               foregroundColor: Colors.white,
               elevation: 4,
-              shadowColor: const Color(0xFFF27F0D).withValues(alpha: 0.4),
+              shadowColor: const Color(0xFFF05A4F).withValues(alpha: 0.4),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
             ),
             onPressed: _isLoading ? null : _submitJourney,
             child: _isLoading
-              ? const CircularProgressIndicator(color: Colors.white)
-              : Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: const [
-                    Text(
-                      "Continue",
-                      style: TextStyle(
-                        fontFamily: "Plus Jakarta Sans",
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
+                ? const CircularProgressIndicator(color: Colors.white)
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: const [
+                      Text(
+                        "Continue",
+                        style: TextStyle(
+                          fontFamily: "Plus Jakarta Sans",
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                    ),
-                    SizedBox(width: 8),
-                    Icon(Icons.arrow_forward, size: 20),
-                  ],
-                ),
+                      SizedBox(width: 8),
+                      Icon(Icons.arrow_forward, size: 20),
+                    ],
+                  ),
           ),
         ),
       ),
@@ -274,10 +299,14 @@ class _FlexibilityOptionsPageState extends State<FlexibilityOptionsPage> {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFFF27F0D).withValues(alpha: 0.05) : Colors.white,
+          color: isSelected
+              ? const Color(0xFFF05A4F).withValues(alpha: 0.05)
+              : Colors.white,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isSelected ? const Color(0xFFF27F0D) : const Color(0xFFE2E8F0),
+            color: isSelected
+                ? const Color(0xFFF05A4F)
+                : const Color(0xFFE2E8F0),
             width: isSelected ? 2 : 1,
           ),
           boxShadow: [
@@ -299,7 +328,9 @@ class _FlexibilityOptionsPageState extends State<FlexibilityOptionsPage> {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: isSelected ? const Color(0xFFF27F0D) : const Color(0xFFCBD5E1),
+                  color: isSelected
+                      ? const Color(0xFFF05A4F)
+                      : const Color(0xFFCBD5E1),
                   width: isSelected ? 6 : 2,
                 ),
               ),
@@ -333,7 +364,9 @@ class _FlexibilityOptionsPageState extends State<FlexibilityOptionsPage> {
             ),
             Icon(
               icon,
-              color: isSelected ? const Color(0xFFF27F0D) : const Color(0xFF94A3B8),
+              color: isSelected
+                  ? const Color(0xFFF05A4F)
+                  : const Color(0xFF94A3B8),
               size: 24,
             ),
           ],

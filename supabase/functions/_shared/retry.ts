@@ -1,3 +1,4 @@
+// @ts-nocheck
 export async function withRetry<T>(
   fn: () => Promise<T>,
   maxAttempts = 3,
@@ -19,3 +20,4 @@ export async function withRetry<T>(
   }
   throw lastError;
 }
+

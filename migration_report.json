@@ -1,0 +1,482 @@
+{
+  ".\\lib\\core\\constants\\ui_utils.dart": [
+    5
+  ],
+  ".\\lib\\core\\motion\\needin_motion.dart": [
+    19,
+    23,
+    175,
+    248,
+    393
+  ],
+  ".\\lib\\core\\services\\payment_service.dart": [
+    38
+  ],
+  ".\\lib\\core\\theme\\app_theme.dart": [
+    5
+  ],
+  ".\\lib\\core\\widgets\\mpin_input_widget.dart": [
+    84
+  ],
+  ".\\lib\\core\\widgets\\pricing_display_card.dart": [
+    99,
+    138,
+    243,
+    248,
+    260,
+    283,
+    447,
+    457,
+    495,
+    501,
+    571
+  ],
+  ".\\lib\\core\\widgets\\traveler_card.dart": [
+    97,
+    116
+  ],
+  ".\\lib\\screens\\auth\\set_new_mpin_screen.dart": [
+    146
+  ],
+  ".\\lib\\screens\\login\\coming_soon_page.dart": [
+    41,
+    67
+  ],
+  ".\\lib\\screens\\login\\login_page.dart": [
+    105,
+    111,
+    133,
+    248,
+    252,
+    299,
+    305
+  ],
+  ".\\lib\\screens\\login\\otp_page.dart": [
+    208,
+    247,
+    262,
+    265
+  ],
+  ".\\lib\\screens\\login\\profile_setup_page.dart": [
+    64,
+    187,
+    287,
+    352,
+    387,
+    389,
+    394,
+    429,
+    432
+  ],
+  ".\\lib\\screens\\login\\service_selection_page.dart": [
+    61,
+    79,
+    90,
+    109
+  ],
+  ".\\lib\\screens\\needin_express\\additional_notes_page.dart": [
+    83,
+    98,
+    188,
+    309,
+    311,
+    316,
+    352,
+    355
+  ],
+  ".\\lib\\screens\\needin_express\\checkout_payment_page.dart": [
+    203,
+    205,
+    208,
+    272
+  ],
+  ".\\lib\\screens\\needin_express\\confirm_delivery_pin_page.dart": [
+    49,
+    53,
+    105,
+    125
+  ],
+  ".\\lib\\screens\\needin_express\\confirm_post_journey_page.dart": [
+    92,
+    267,
+    336,
+    338,
+    429,
+    431,
+    437,
+    441,
+    467,
+    470,
+    540
+  ],
+  ".\\lib\\screens\\needin_express\\earnings_preview_page.dart": [
+    95,
+    181,
+    183,
+    188,
+    204,
+    244,
+    247,
+    300,
+    309,
+    323,
+    326
+  ],
+  ".\\lib\\screens\\needin_express\\express_dashboard_page.dart": [
+    119,
+    130,
+    148,
+    192,
+    204,
+    215,
+    216,
+    263,
+    364,
+    374
+  ],
+  ".\\lib\\screens\\needin_express\\express_profile_page.dart": [
+    212,
+    224,
+    237,
+    250,
+    364,
+    378,
+    463,
+    466,
+    516,
+    535,
+    536,
+    584,
+    627,
+    906,
+    910,
+    943,
+    951
+  ],
+  ".\\lib\\screens\\needin_express\\flexibility_options_page.dart": [
+    102,
+    142,
+    179,
+    230,
+    233,
+    277,
+    280,
+    302,
+    336
+  ],
+  ".\\lib\\screens\\needin_express\\identity_verification_page.dart": [
+    134,
+    138,
+    267,
+    311,
+    312,
+    319,
+    436,
+    439,
+    479,
+    489
+  ],
+  ".\\lib\\screens\\needin_express\\journey_detail_page.dart": [
+    84,
+    147,
+    292,
+    294,
+    402,
+    407,
+    413,
+    417,
+    469,
+    472,
+    504,
+    506,
+    508
+  ],
+  ".\\lib\\screens\\needin_express\\journey_mode_schedule_page.dart": [
+    36,
+    50,
+    168,
+    226,
+    228,
+    232,
+    241,
+    263,
+    266,
+    276,
+    281,
+    292,
+    301,
+    359,
+    361,
+    366,
+    422,
+    425
+  ],
+  ".\\lib\\screens\\needin_express\\journey_posted_success_page.dart": [
+    117,
+    127,
+    196,
+    201,
+    258,
+    274,
+    276,
+    277
+  ],
+  ".\\lib\\screens\\needin_express\\manage_payment_methods_page.dart": [
+    31,
+    133,
+    137,
+    196,
+    264,
+    265,
+    368,
+    402
+  ],
+  ".\\lib\\screens\\needin_express\\my_journeys_page.dart": [
+    97,
+    111,
+    191,
+    197,
+    255,
+    270,
+    291,
+    306,
+    395,
+    399,
+    401,
+    415
+  ],
+  ".\\lib\\screens\\needin_express\\onboarding_travel_earn_page.dart": [
+    55,
+    93,
+    103
+  ],
+  ".\\lib\\screens\\needin_express\\parcel_size_selection_page.dart": [
+    128,
+    191,
+    194,
+    204,
+    207,
+    240,
+    343,
+    346,
+    388,
+    391,
+    472,
+    475
+  ],
+  ".\\lib\\screens\\needin_express\\personal_info_page.dart": [
+    183,
+    234,
+    253,
+    317,
+    382,
+    385
+  ],
+  ".\\lib\\screens\\needin_express\\post_journey_page.dart": [
+    188,
+    325,
+    326,
+    349,
+    512,
+    585,
+    627,
+    633,
+    641,
+    771,
+    788,
+    794,
+    802,
+    806,
+    808,
+    816,
+    852,
+    855,
+    900,
+    936,
+    943,
+    1036,
+    1039,
+    1134,
+    1325,
+    1374
+  ],
+  ".\\lib\\screens\\needin_express\\request_sent_success_page.dart": [
+    62
+  ],
+  ".\\lib\\screens\\needin_express\\route_details_page.dart": [
+    91,
+    110,
+    166
+  ],
+  ".\\lib\\screens\\needin_express\\route_map_preview_page.dart": [
+    89,
+    153,
+    164,
+    196,
+    275,
+    278,
+    327,
+    356,
+    357,
+    396,
+    400
+  ],
+  ".\\lib\\screens\\needin_express\\scan_to_pickup_page.dart": [
+    49,
+    53,
+    105,
+    125
+  ],
+  ".\\lib\\screens\\needin_express\\sender_parcel_info_page.dart": [
+    266,
+    269,
+    279,
+    288,
+    454,
+    457,
+    489,
+    575,
+    578
+  ],
+  ".\\lib\\screens\\needin_express\\sender_request_success_page.dart": [
+    124,
+    134,
+    138,
+    211,
+    222,
+    233,
+    260,
+    347,
+    480,
+    519,
+    522
+  ],
+  ".\\lib\\screens\\needin_express\\sender_search_travelers_page.dart": [
+    172,
+    323,
+    324,
+    347,
+    456,
+    469,
+    543,
+    565,
+    574,
+    583,
+    633,
+    638,
+    670,
+    814,
+    879,
+    982,
+    987,
+    998,
+    1008,
+    1189,
+    1233,
+    1543,
+    1616
+  ],
+  ".\\lib\\screens\\needin_express\\sender_traveler_profile_page.dart": [
+    141,
+    286,
+    347,
+    353,
+    366,
+    477,
+    486,
+    604,
+    607,
+    764,
+    827
+  ],
+  ".\\lib\\screens\\needin_express\\sender_traveler_search_results_page.dart": [
+    274,
+    312,
+    332,
+    336,
+    365,
+    366,
+    378,
+    403,
+    407,
+    413,
+    649,
+    698,
+    703,
+    736,
+    741,
+    801,
+    805,
+    887,
+    900
+  ],
+  ".\\lib\\screens\\needin_express\\space_weight_page.dart": [
+    147,
+    153,
+    162,
+    247,
+    272,
+    295,
+    297,
+    302,
+    356,
+    359,
+    369,
+    374,
+    389,
+    398,
+    409,
+    455,
+    512
+  ],
+  ".\\lib\\screens\\needin_express\\verification_failed_screen.dart": [
+    92,
+    96
+  ],
+  ".\\lib\\screens\\needin_express\\verification_status_reviewing_page.dart": [
+    72
+  ],
+  ".\\lib\\screens\\needin_express\\verification_success_screen.dart": [
+    132,
+    162,
+    165
+  ],
+  ".\\lib\\screens\\needin_express\\weight_capacity_selection_page.dart": [
+    64,
+    165,
+    169,
+    205,
+    208,
+    220,
+    226,
+    267,
+    270
+  ],
+  ".\\lib\\screens\\onboarding\\onboarding1.dart": [
+    30,
+    63,
+    66,
+    136,
+    178,
+    181
+  ],
+  ".\\lib\\screens\\onboarding\\onboarding2.dart": [
+    124,
+    128,
+    163,
+    166
+  ],
+  ".\\lib\\screens\\onboarding\\onboarding3.dart": [
+    67,
+    70,
+    139,
+    219,
+    243,
+    246
+  ],
+  ".\\lib\\screens\\onboarding\\onboarding_screen.dart": [
+    72,
+    125,
+    142
+  ]
+}

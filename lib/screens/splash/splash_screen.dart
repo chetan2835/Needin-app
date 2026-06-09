@@ -169,7 +169,7 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white, // Clean white minimum layout
+      backgroundColor: Colors.white, // Pure white background
       body: Center(
         child: AnimatedBuilder(
           animation: Listenable.merge([
@@ -239,7 +239,7 @@ class _SplashScreenState extends State<SplashScreen>
                         width: 180,
                         height: 180,
                         child: Image.asset(
-                          'assets/images/needin logo.jpeg',
+                          'assets/images/needin logo popup.png',
                           fit: BoxFit.contain,
                           filterQuality: FilterQuality.high,
                         ),

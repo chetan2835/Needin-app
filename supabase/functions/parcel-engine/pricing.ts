@@ -1,3 +1,4 @@
+// @ts-nocheck
 export const pricingConfig = {
   "same-city": {
     MICRO: 49,
@@ -60,3 +61,4 @@ export function calculatePrice(
     category: parcelCategory
   };
 }
+

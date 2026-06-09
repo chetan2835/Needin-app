@@ -2,8 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/services/auth_service.dart';
 import 'package:provider/provider.dart';
@@ -14,9 +17,17 @@ import '../../core/services/pricing_service.dart';
 import '../../core/services/pricing_engine.dart';
 import '../../core/models/pricing_result.dart';
 import '../../core/widgets/google_attribution.dart';
+import '../../core/services/map_marker_factory.dart';
+import '../../core/services/location_validation_service.dart';
+import '../../core/services/journey_draft_service.dart';
+import '../../core/providers/journey_draft_provider.dart';
+
 
 class PostJourneyPage extends StatefulWidget {
-  const PostJourneyPage({super.key});
+  final Map<String, dynamic>? initialDraftData;
+  final String? draftId;
+
+  const PostJourneyPage({super.key, this.initialDraftData, this.draftId});
 
   @override
   State<PostJourneyPage> createState() => _PostJourneyPageState();
@@ -36,18 +47,162 @@ class _PostJourneyPageState extends State<PostJourneyPage> {
   final List<LatLng> _animatedRouteCoordinates = [];
   Timer? _routeAnimator;
   bool _isLoadingRoute = false;
+  String? _encodedPolyline;
 
   // Route info
   double? _distanceKM;
   String? _durationStr;
+  int? _durationSeconds;
   LatLngBounds? _pendingBounds;
 
   // Pricing / Earnings state
   Map<ParcelSize, PricingResult>? _earningsPreview;
-  bool _isEarningsLoading = false;
   final PricingService _pricingService = PricingService();
 
   final bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialDraftData != null) {
+      final draft = widget.initialDraftData!;
+      if (draft['origin'] != null && draft['origin_lat'] != null && draft['origin_lng'] != null) {
+        _fromLocation = {
+          'name': draft['origin'],
+          'lat': draft['origin_lat'],
+          'lng': draft['origin_lng'],
+        };
+      }
+      if (draft['destination'] != null && draft['dest_lat'] != null && draft['dest_lng'] != null) {
+        _toLocation = {
+          'name': draft['destination'],
+          'lat': draft['dest_lat'],
+          'lng': draft['dest_lng'],
+        };
+      }
+      if (draft['_display'] != null && draft['_display']['via_cities_data'] != null) {
+        final List viaList = draft['_display']['via_cities_data'];
+        for (var v in viaList) {
+          _viaCities.add(Map<String, dynamic>.from(v));
+        }
+      }
+      if (_fromLocation != null && _toLocation != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _fetchRouteAndAnimate();
+        });
+      }
+      
+      Future.microtask(() {
+        if (mounted) {
+          context.read<JourneyDraftProvider>().initialize(
+            initialData: widget.initialDraftData,
+            id: widget.draftId,
+          );
+        }
+      });
+    } else {
+      Future.microtask(() {
+        if (mounted) {
+          context.read<JourneyDraftProvider>().clear();
+        }
+      });
+    }
+  }
+
+  Future<void> _showDraftModal() async {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.all(24),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(width: 48, height: 4, decoration: BoxDecoration(color: const Color(0xFFE2E8F0), borderRadius: BorderRadius.circular(2))),
+            const SizedBox(height: 24),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(color: const Color(0xFFF05A4F).withValues(alpha: 0.1), shape: BoxShape.circle),
+              child: const Icon(Icons.save_as_outlined, color: Color(0xFFF05A4F), size: 32),
+            ),
+            const SizedBox(height: 24),
+            const Text("Save as Draft?", style: TextStyle(fontFamily: "Plus Jakarta Sans", fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+            const SizedBox(height: 12),
+            const Text("Your journey details are not complete. Save them as a draft and continue later?", textAlign: TextAlign.center, style: TextStyle(fontFamily: "Plus Jakarta Sans", fontSize: 15, color: Color(0xFF64748B), height: 1.5)),
+            const SizedBox(height: 32),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      Navigator.pop(context); // Discard and exit
+                    },
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      side: const BorderSide(color: Color(0xFFE2E8F0)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
+                    child: const Text("Discard", style: TextStyle(fontFamily: "Plus Jakarta Sans", fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF64748B))),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      Navigator.pop(ctx);
+                      _saveAsDraftAndExit();
+                    },
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      backgroundColor: const Color(0xFFF05A4F),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      elevation: 0,
+                    ),
+                    child: const Text("Save Draft", style: TextStyle(fontFamily: "Plus Jakarta Sans", fontSize: 16, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _saveAsDraftAndExit() async {
+    final draftData = {
+      'origin_lat': _fromLocation?['lat'],
+      'origin_lng': _fromLocation?['lng'],
+      'dest_lat': _toLocation?['lat'],
+      'dest_lng': _toLocation?['lng'],
+      '_display': {
+        'via_cities_data': _viaCities.map((c) => {
+          'name': c['name'],
+          'lat': (c['lat'] as num).toDouble(),
+          'lng': (c['lng'] as num).toDouble(),
+        }).toList(),
+      }
+    };
+    
+    await JourneyDraftService().saveDraft(
+      existingDraftId: widget.draftId,
+      currentStep: 1,
+      completionPercentage: 12.5,
+      draftData: draftData,
+      origin: _fromLocation?['name'],
+      destination: _toLocation?['name'],
+    );
+    
+    if (mounted) Navigator.pop(context);
+  }
 
   @override
   void dispose() {
@@ -72,9 +227,9 @@ class _PostJourneyPageState extends State<PostJourneyPage> {
 
   Future<void> _fitBounds(LatLngBounds bounds) async {
     if (_googleMapController != null) {
-      await Future.delayed(const Duration(milliseconds: 400));
+      await Future.delayed(const Duration(milliseconds: 200));
       if (mounted && _googleMapController != null) {
-        _googleMapController!.moveCamera(
+        _googleMapController!.animateCamera(
           CameraUpdate.newLatLngBounds(bounds, 60),
         );
       }
@@ -95,8 +250,7 @@ class _PostJourneyPageState extends State<PostJourneyPage> {
     final destLat = (_toLocation!['lat'] as num).toDouble();
     final destLng = (_toLocation!['lng'] as num).toDouble();
 
-    debugPrint('\n📍 [Traveler Route] $originLat,$originLng → $destLat,$destLng');
-
+    // Single batched setState — markers + state reset in one frame
     setState(() {
       _isLoadingRoute = true;
       _markers.clear();
@@ -104,31 +258,26 @@ class _PostJourneyPageState extends State<PostJourneyPage> {
       _animatedRouteCoordinates.clear();
       _distanceKM = null;
       _durationStr = null;
-    });
+      _durationSeconds = null;
 
-    // 1. Add Markers
-    setState(() {
-      _markers.add(Marker(
-        markerId: const MarkerId('origin'),
+      // Add markers immediately using centralized factory
+      _markers.add(MapMarkerFactory.createPickupMarker(
         position: LatLng(originLat, originLng),
-        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange),
-        infoWindow: InfoWindow(title: _fromLocation!['name'] ?? 'Origin'),
+        title: _fromLocation!['name'] ?? 'Origin',
+        markerId: 'origin',
       ));
-      _markers.add(Marker(
-        markerId: const MarkerId('destination'),
+      _markers.add(MapMarkerFactory.createDropMarker(
         position: LatLng(destLat, destLng),
-        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-        infoWindow: InfoWindow(title: _toLocation!['name'] ?? 'Destination'),
+        title: _toLocation!['name'] ?? 'Destination',
+        markerId: 'destination',
       ));
-      // Add via/waypoint markers
       for (int i = 0; i < _viaCities.length; i++) {
         final vLat = (_viaCities[i]['lat'] as num).toDouble();
         final vLng = (_viaCities[i]['lng'] as num).toDouble();
-        _markers.add(Marker(
-          markerId: MarkerId('via_$i'),
+        _markers.add(MapMarkerFactory.createViaMarker(
           position: LatLng(vLat, vLng),
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
-          infoWindow: InfoWindow(title: _viaCities[i]['name'] ?? 'Via'),
+          index: i,
+          title: _viaCities[i]['name'] ?? 'Via',
         ));
       }
     });
@@ -156,7 +305,9 @@ class _PostJourneyPageState extends State<PostJourneyPage> {
     if (result.isSuccess) {
       _distanceKM = result.distanceKm;
       _durationStr = result.durationText;
+      _durationSeconds = result.durationValueSeconds;
       _fullRouteCoordinates = result.polylinePoints;
+      _encodedPolyline = result.encodedPolyline;
 
       // Trigger earnings preview calculation
       _calculateEarningsPreview();
@@ -185,7 +336,7 @@ class _PostJourneyPageState extends State<PostJourneyPage> {
           _polylines = {
             Polyline(
               polylineId: const PolylineId('route_line'),
-              color: const Color(0xFFF27F0D),
+              color: const Color(0xFFF05A4F),
               width: 5,
               points: List.from(_animatedRouteCoordinates),
               jointType: JointType.round,
@@ -217,8 +368,6 @@ class _PostJourneyPageState extends State<PostJourneyPage> {
   Future<void> _calculateEarningsPreview() async {
     if (_fromLocation == null || _toLocation == null) return;
 
-    setState(() => _isEarningsLoading = true);
-
     try {
       final originLat = (_fromLocation!['lat'] as num).toDouble();
       final originLng = (_fromLocation!['lng'] as num).toDouble();
@@ -237,11 +386,9 @@ class _PostJourneyPageState extends State<PostJourneyPage> {
       if (!mounted) return;
       setState(() {
         _earningsPreview = allPrices;
-        _isEarningsLoading = false;
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() => _isEarningsLoading = false);
       debugPrint('Earnings preview error: $e');
     }
   }
@@ -257,7 +404,18 @@ class _PostJourneyPageState extends State<PostJourneyPage> {
       backgroundColor: Colors.transparent,
       builder: (context) => _TravelerLocationSearchModal(
         isFrom: isFrom,
-        onSelect: (location) {
+        onSelect: (location) async {
+          // India-only validation
+          final lat = (location['lat'] as num).toDouble();
+          final lng = (location['lng'] as num).toDouble();
+          final capturedCtx = context; // capture before async
+          final isValid = await LocationValidationService.isCoordinatesInIndia(lat, lng);
+          if (!isValid) {
+            if (capturedCtx.mounted) {
+              LocationValidationService.showIndiaOnlyRestrictionDialog(capturedCtx);
+            }
+            return;
+          }
           setState(() {
             if (isFrom) {
               _fromLocation = location;
@@ -271,107 +429,6 @@ class _PostJourneyPageState extends State<PostJourneyPage> {
     );
   }
 
-  void _showLocationBottomSheet(LatLng location, PlaceLocation place) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (context) => Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40, height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey[300],
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              place.name,
-              style: const TextStyle(
-                fontFamily: "Plus Jakarta Sans",
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              place.address,
-              style: TextStyle(
-                fontFamily: "Plus Jakarta Sans",
-                fontSize: 13,
-                color: Colors.grey[600],
-              ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 20),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    icon: const Icon(Icons.trip_origin, size: 18),
-                    label: const Text('Set as Origin'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFFF27F0D),
-                      side: const BorderSide(color: Color(0xFFF27F0D)),
-                    ),
-                    onPressed: () {
-                      Navigator.pop(context);
-                      setState(() {
-                        _fromLocation = {
-                          'name': place.name,
-                          'city': '',
-                          'lat': place.lat,
-                          'lng': place.lng,
-                          'placeId': place.placeId,
-                        };
-                      });
-                      _fetchRouteAndAnimate();
-                    },
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    icon: const Icon(Icons.location_on, size: 18),
-                    label: const Text('Set as Dest'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFF27F0D),
-                      foregroundColor: Colors.white,
-                    ),
-                    onPressed: () {
-                      Navigator.pop(context);
-                      setState(() {
-                        _toLocation = {
-                          'name': place.name,
-                          'city': '',
-                          'lat': place.lat,
-                          'lng': place.lng,
-                          'placeId': place.placeId,
-                        };
-                      });
-                      _fetchRouteAndAnimate();
-                    },
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
-  }
 
   void _showViaSearch() {
     showModalBottomSheet(
@@ -380,7 +437,18 @@ class _PostJourneyPageState extends State<PostJourneyPage> {
       backgroundColor: Colors.transparent,
       builder: (context) => _TravelerLocationSearchModal(
         isFrom: false,
-        onSelect: (location) {
+        onSelect: (location) async {
+          // India-only validation
+          final lat = (location['lat'] as num).toDouble();
+          final lng = (location['lng'] as num).toDouble();
+          final capturedCtx = context; // capture before async
+          final isValid = await LocationValidationService.isCoordinatesInIndia(lat, lng);
+          if (!isValid) {
+            if (capturedCtx.mounted) {
+              LocationValidationService.showIndiaOnlyRestrictionDialog(capturedCtx);
+            }
+            return;
+          }
           setState(() {
             _viaCities.add(location);
           });
@@ -388,6 +456,48 @@ class _PostJourneyPageState extends State<PostJourneyPage> {
         },
       ),
     );
+  }
+
+  // ─────────────────────────────────────────────────────────
+  //  OPEN IN GOOGLE MAPS — Launch external Google Maps with route
+  // ─────────────────────────────────────────────────────────
+  Future<void> _openInGoogleMaps() async {
+    if (_fromLocation == null || _toLocation == null) return;
+
+    final oLat = (_fromLocation!['lat'] as num).toDouble();
+    final oLng = (_fromLocation!['lng'] as num).toDouble();
+    final dLat = (_toLocation!['lat'] as num).toDouble();
+    final dLng = (_toLocation!['lng'] as num).toDouble();
+
+    String urlStr = 'https://www.google.com/maps/dir/?api=1'
+        '&origin=$oLat,$oLng'
+        '&destination=$dLat,$dLng'
+        '&travelmode=driving';
+
+    if (_viaCities.isNotEmpty) {
+      final wps = _viaCities.map((c) {
+        final lat = (c['lat'] as num).toDouble();
+        final lng = (c['lng'] as num).toDouble();
+        return '$lat,$lng';
+      }).join('|');
+      urlStr += '&waypoints=$wps';
+    }
+
+    final url = Uri.parse(urlStr);
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Opening in Google Maps…'),
+          duration: Duration(seconds: 1),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    }
   }
 
   // ─────────────────────────────────────────────────────────
@@ -419,6 +529,8 @@ class _PostJourneyPageState extends State<PostJourneyPage> {
       'destination_lng': _toLocation!['lng'],
       'distance_km': _distanceKM,  // numeric, not string
       'duration_text': _durationStr,
+      'duration_seconds': _durationSeconds,
+      'route_polyline': _encodedPolyline,
       'status': 'active',
       'price_small': _earningsPreview?[ParcelSize.small]?.price,
       'price_medium': _earningsPreview?[ParcelSize.medium]?.price,
@@ -434,14 +546,27 @@ class _PostJourneyPageState extends State<PostJourneyPage> {
       'earnings_small': _earningsPreview?[ParcelSize.small]?.price,
       'earnings_medium': _earningsPreview?[ParcelSize.medium]?.price,
       'earnings_large': _earningsPreview?[ParcelSize.large]?.price,
+      // Full via city data with coordinates for Step 8 map markers & Google Maps URL
+      'via_cities_data': _viaCities.map((c) => {
+        'name': c['name'],
+        'lat': (c['lat'] as num).toDouble(),
+        'lng': (c['lng'] as num).toDouble(),
+      }).toList(),
     };
 
     // Merge: journeyData for DB insert + displayMeta for UI display
-    final fullJourneyData = {...journeyData, '_display': displayMeta};
+    final fullJourneyData = {
+      ...journeyData, 
+      '_display': displayMeta,
+      if (widget.draftId != null) 'draft_id': widget.draftId,
+    };
+
+    final providerConfig = Provider.of<JourneyDraftProvider>(context, listen: false);
+    providerConfig.updateData(fullJourneyData);
 
     Navigator.push(context,
       MaterialPageRoute(
-        builder: (_) => JourneyModeSchedulePage(journeyData: fullJourneyData),
+        builder: (_) => JourneyModeSchedulePage(journeyData: providerConfig.draftData),
       ),
     );
   }
@@ -451,30 +576,46 @@ class _PostJourneyPageState extends State<PostJourneyPage> {
   // ─────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFFAFAFA),
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            /// Header
-            Container(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              color: Colors.white,
-              child: Row(
-                children: [
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: const BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.transparent,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        if (_fromLocation != null || _toLocation != null) {
+          await _showDraftModal();
+        } else {
+          Navigator.pop(context);
+        }
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFFFAFAFA),
+        body: SafeArea(
+          bottom: false,
+          child: Column(
+            children: [
+              /// Header
+              Container(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                color: Colors.white,
+                child: Row(
+                  children: [
+                    GestureDetector(
+                      onTap: () async {
+                        if (_fromLocation != null || _toLocation != null) {
+                          await _showDraftModal();
+                        } else {
+                          Navigator.pop(context);
+                        }
+                      },
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.transparent,
+                        ),
+                        child: const Icon(Icons.arrow_back, color: Color(0xFF0F172A)),
                       ),
-                      child: const Icon(Icons.arrow_back, color: Color(0xFF0F172A)),
                     ),
-                  ),
                   const Expanded(
                     child: Padding(
                       padding: EdgeInsets.only(right: 40),
@@ -504,12 +645,12 @@ class _PostJourneyPageState extends State<PostJourneyPage> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: const [
                       Text(
-                        "Step 1 of 11",
+                        "Step 1 of 7",
                         style: TextStyle(
                           fontFamily: "Plus Jakarta Sans",
                           fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFFF27F0D),
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF22C55E),
                         ),
                       ),
                       Text(
@@ -525,13 +666,13 @@ class _PostJourneyPageState extends State<PostJourneyPage> {
                   ),
                   const SizedBox(height: 8),
                   Row(
-                    children: List.generate(8, (index) {
+                    children: List.generate(7, (index) {
                       return Expanded(
                         child: Container(
                           height: 6,
-                          margin: EdgeInsets.only(right: index < 7 ? 6 : 0),
+                          margin: EdgeInsets.only(right: index < 6 ? 6 : 0),
                           decoration: BoxDecoration(
-                            color: index < 1 ? const Color(0xFFF27F0D) : const Color(0xFFE2E8F0),
+                            color: index < 1 ? const Color(0xFF22C55E) : const Color(0xFFE2E8F0),
                             borderRadius: BorderRadius.circular(3),
                           ),
                         ),
@@ -582,7 +723,7 @@ class _PostJourneyPageState extends State<PostJourneyPage> {
                             label: "From City",
                             hint: "Search starting city...",
                             icon: Icons.trip_origin,
-                            iconColor: const Color(0xFFF27F0D),
+                            iconColor: const Color(0xFF2563EB),
                             location: _fromLocation,
                             onTap: () => _showLocationSearch(true),
                           ),
@@ -624,13 +765,13 @@ class _PostJourneyPageState extends State<PostJourneyPage> {
                                       child: Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                                         decoration: BoxDecoration(
-                                          color: const Color(0xFFF27F0D).withValues(alpha: 0.1),
+                                          color: const Color(0xFFF05A4F).withValues(alpha: 0.1),
                                           borderRadius: BorderRadius.circular(20),
                                         ),
                                         child: const Row(
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
-                                            Icon(Icons.add, size: 16, color: Color(0xFFF27F0D)),
+                                            Icon(Icons.add, size: 16, color: Color(0xFFF05A4F)),
                                             SizedBox(width: 4),
                                             Text(
                                               "Add Stop",
@@ -638,7 +779,7 @@ class _PostJourneyPageState extends State<PostJourneyPage> {
                                                 fontFamily: "Plus Jakarta Sans",
                                                 fontSize: 12,
                                                 fontWeight: FontWeight.bold,
-                                                color: Color(0xFFF27F0D),
+                                                color: Color(0xFFF05A4F),
                                               ),
                                             ),
                                           ],
@@ -682,11 +823,11 @@ class _PostJourneyPageState extends State<PostJourneyPage> {
                                   decoration: BoxDecoration(
                                     color: Colors.white,
                                     borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: const Color(0xFF3B82F6).withValues(alpha: 0.3)),
+                                    border: Border.all(color: const Color(0xFF22C55E).withValues(alpha: 0.3)),
                                   ),
                                   child: Row(
                                     children: [
-                                      const Icon(Icons.circle, size: 10, color: Color(0xFF3B82F6)),
+                                      const Icon(Icons.circle, size: 10, color: Color(0xFF22C55E)),
                                       const SizedBox(width: 12),
                                       Expanded(
                                         child: Text(
@@ -749,26 +890,27 @@ class _PostJourneyPageState extends State<PostJourneyPage> {
                               markers: _markers,
                               polylines: _polylines,
                               myLocationEnabled: true,
-                              myLocationButtonEnabled: true,
-                              zoomControlsEnabled: false,
+                              myLocationButtonEnabled: false,
+                              zoomControlsEnabled: true,
+                              zoomGesturesEnabled: true,
+                              scrollGesturesEnabled: true,
+                              tiltGesturesEnabled: true,
+                              rotateGesturesEnabled: true,
+                              gestureRecognizers: <Factory<OneSequenceGestureRecognizer>>{
+                                Factory<OneSequenceGestureRecognizer>(
+                                  () => EagerGestureRecognizer(),
+                                ),
+                              },
                               mapToolbarEnabled: false,
                               onMapCreated: _onMapCreated,
-                              onTap: (LatLng tappedLocation) async {
-                                final place = await MapService.reverseGeocode(
-                                  tappedLocation.latitude,
-                                  tappedLocation.longitude,
-                                );
-                                if (place != null && mounted) {
-                                  _showLocationBottomSheet(tappedLocation, place);
-                                }
-                              },
+                              onTap: (_) => _openInGoogleMaps(),
                             ),
                             if (_isLoadingRoute)
                               Container(
                                 color: Colors.white.withValues(alpha: 0.7),
                                 alignment: Alignment.center,
                                 child: const CircularProgressIndicator(
-                                  color: Color(0xFFF27F0D),
+                                  color: Color(0xFFF05A4F),
                                 ),
                               ),
                           ],
@@ -785,13 +927,13 @@ class _PostJourneyPageState extends State<PostJourneyPage> {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                               decoration: BoxDecoration(
-                                color: const Color(0xFFF27F0D).withValues(alpha: 0.1),
+                                color: const Color(0xFFF05A4F).withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(20),
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  const Icon(Icons.straighten, size: 16, color: Color(0xFFF27F0D)),
+                                  const Icon(Icons.straighten, size: 16, color: Color(0xFFF05A4F)),
                                   const SizedBox(width: 6),
                                   Text(
                                     "${_distanceKM!.toStringAsFixed(1)} KM",
@@ -799,13 +941,13 @@ class _PostJourneyPageState extends State<PostJourneyPage> {
                                       fontFamily: "Plus Jakarta Sans",
                                       fontSize: 13,
                                       fontWeight: FontWeight.bold,
-                                      color: Color(0xFFF27F0D),
+                                      color: Color(0xFFF05A4F),
                                     ),
                                   ),
                                   const SizedBox(width: 12),
-                                  Container(width: 1, height: 16, color: const Color(0xFFF27F0D).withValues(alpha: 0.3)),
+                                  Container(width: 1, height: 16, color: const Color(0xFFF05A4F).withValues(alpha: 0.3)),
                                   const SizedBox(width: 12),
-                                  const Icon(Icons.timer, size: 16, color: Color(0xFFF27F0D)),
+                                  const Icon(Icons.timer, size: 16, color: Color(0xFFF05A4F)),
                                   const SizedBox(width: 6),
                                   Text(
                                     _durationStr!,
@@ -813,7 +955,7 @@ class _PostJourneyPageState extends State<PostJourneyPage> {
                                       fontFamily: "Plus Jakarta Sans",
                                       fontSize: 13,
                                       fontWeight: FontWeight.bold,
-                                      color: Color(0xFFF27F0D),
+                                      color: Color(0xFFF05A4F),
                                     ),
                                   ),
                                 ],
@@ -849,10 +991,10 @@ class _PostJourneyPageState extends State<PostJourneyPage> {
                                   width: 48,
                                   height: 48,
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFFF27F0D).withValues(alpha: 0.1),
+                                    color: const Color(0xFFF05A4F).withValues(alpha: 0.1),
                                     borderRadius: BorderRadius.circular(12),
                                   ),
-                                  child: const Icon(Icons.directions_car, color: Color(0xFFF27F0D), size: 24),
+                                  child: const Icon(Icons.directions_car, color: Color(0xFFF05A4F), size: 24),
                                 ),
                                 const SizedBox(width: 16),
                                 Expanded(
@@ -897,7 +1039,7 @@ class _PostJourneyPageState extends State<PostJourneyPage> {
                                   children: [
                                     Container(width: 12, height: 12, decoration: BoxDecoration(color: Colors.white, border: Border.all(color: const Color(0xFFCBD5E1), width: 2), shape: BoxShape.circle)),
                                     Container(width: 2, height: 24, color: const Color(0xFFE2E8F0)),
-                                    Container(width: 12, height: 12, decoration: const BoxDecoration(color: Color(0xFFF27F0D), shape: BoxShape.circle)),
+                                    Container(width: 12, height: 12, decoration: const BoxDecoration(color: Color(0xFFF05A4F), shape: BoxShape.circle)),
                                   ],
                                 ),
                                 const SizedBox(width: 12),
@@ -926,86 +1068,7 @@ class _PostJourneyPageState extends State<PostJourneyPage> {
                           ],
                         ),
                       ),
-                    // ─── Earnings Preview Card ───
-                    if (_isEarningsLoading || _earningsPreview != null)
-                      Container(
-                        margin: const EdgeInsets.only(left: 24, right: 24, top: 16),
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFFF27F0D), Color(0xFFE86B00)],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          borderRadius: BorderRadius.circular(20),
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFFF27F0D).withValues(alpha: 0.3),
-                              blurRadius: 16,
-                              offset: const Offset(0, 6),
-                            ),
-                          ],
-                        ),
-                        child: _isEarningsLoading
-                            ? const Center(
-                                child: Padding(
-                                  padding: EdgeInsets.all(8),
-                                  child: CircularProgressIndicator(
-                                    color: Colors.white,
-                                    strokeWidth: 2,
-                                  ),
-                                ),
-                              )
-                            : Column(
-                                children: [
-                                  Row(
-                                    children: [
-                                      const Icon(Icons.trending_up, color: Colors.white, size: 20),
-                                      const SizedBox(width: 8),
-                                      const Text(
-                                        "Potential Earnings",
-                                        style: TextStyle(
-                                          fontFamily: "Plus Jakarta Sans",
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.white,
-                                        ),
-                                      ),
-                                      const Spacer(),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                        decoration: BoxDecoration(
-                                          color: Colors.white.withValues(alpha: 0.2),
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                        child: const Text(
-                                          "PER PARCEL",
-                                          style: TextStyle(
-                                            fontFamily: "Plus Jakarta Sans",
-                                            fontSize: 9,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.white,
-                                            letterSpacing: 0.5,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 16),
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                                    children: [
-                                      _buildEarningsTile("Small", _earningsPreview?[ParcelSize.small]?.price),
-                                      Container(width: 1, height: 40, color: Colors.white.withValues(alpha: 0.2)),
-                                      _buildEarningsTile("Medium", _earningsPreview?[ParcelSize.medium]?.price),
-                                      Container(width: 1, height: 40, color: Colors.white.withValues(alpha: 0.2)),
-                                      _buildEarningsTile("Large", _earningsPreview?[ParcelSize.large]?.price),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                      ),
-                    const SizedBox(height: 100),
+                    const SizedBox(height: 40),
                   ],
                 ),
               ),
@@ -1033,10 +1096,10 @@ class _PostJourneyPageState extends State<PostJourneyPage> {
           width: double.infinity,
           child: ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFF27F0D),
+              backgroundColor: const Color(0xFFF05A4F),
               foregroundColor: Colors.white,
               elevation: 8,
-              shadowColor: const Color(0xFFFBD38D),
+              shadowColor: const Color(0xFFF37A72),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(32),
               ),
@@ -1062,36 +1125,7 @@ class _PostJourneyPageState extends State<PostJourneyPage> {
           ),
         ),
       ),
-    );
-  }
-
-  // ─────────────────────────────────────────────────────────
-  //  EARNINGS TILE WIDGET
-  // ─────────────────────────────────────────────────────────
-  Widget _buildEarningsTile(String label, int? price) {
-    return Column(
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontFamily: "Plus Jakarta Sans",
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            color: Colors.white.withValues(alpha: 0.8),
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          price != null ? "₹$price" : "--",
-          style: const TextStyle(
-            fontFamily: "Plus Jakarta Sans",
-            fontSize: 22,
-            fontWeight: FontWeight.w900,
-            color: Colors.white,
-          ),
-        ),
-      ],
-    );
+    ));
   }
 
   // ─────────────────────────────────────────────────────────
@@ -1131,7 +1165,7 @@ class _PostJourneyPageState extends State<PostJourneyPage> {
               color: location == null ? const Color(0xFFF8FAFC) : Colors.white,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: location != null ? const Color(0xFFF27F0D).withValues(alpha: 0.4) : const Color(0xFFE2E8F0),
+                color: location != null ? const Color(0xFFF05A4F).withValues(alpha: 0.4) : const Color(0xFFE2E8F0),
               ),
             ),
             child: Row(
@@ -1181,13 +1215,14 @@ class _TravelerLocationSearchModal extends StatefulWidget {
 class _TravelerLocationSearchModalState extends State<_TravelerLocationSearchModal> {
   final TextEditingController _searchController = TextEditingController();
   Timer? _debounce;
-  bool _isLoading = false;
+  bool _isSearching = false;  // Inline search indicator (not full-screen blocker)
+  bool _isSelectingPlace = false;  // Separate flag for place selection
   List<dynamic> _predictions = [];
 
   @override
   void initState() {
     super.initState();
-    MapService.startNewSearchSession(); // Reset billing session on modal open
+    MapService.startNewSearchSession();
   }
 
   @override
@@ -1202,18 +1237,29 @@ class _TravelerLocationSearchModalState extends State<_TravelerLocationSearchMod
     if (query.isEmpty) {
       setState(() {
         _predictions = [];
-        _isLoading = false;
+        _isSearching = false;
       });
       return;
     }
 
+    // Show inline indicator immediately (keeps results visible)
+    setState(() => _isSearching = true);
+
     _debounce = Timer(const Duration(milliseconds: 300), () async {
-      setState(() => _isLoading = true);
       final result = await MapService.getAutocomplete(query);
       if (mounted) {
         setState(() {
-          _predictions = result.predictions;
-          _isLoading = false;
+          final unique = <dynamic>[];
+          final seen = <String>{};
+          for (final p in result.predictions) {
+            final pid = p['place_id'] as String?;
+            if (pid != null && !seen.contains(pid)) {
+              seen.add(pid);
+              unique.add(p);
+            }
+          }
+          _predictions = unique.take(9).toList();
+          _isSearching = false;
         });
         if (result.error != null) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -1225,29 +1271,28 @@ class _TravelerLocationSearchModalState extends State<_TravelerLocationSearchMod
   }
 
   Future<void> _fetchPlaceDetails(String placeId, String mainText) async {
-    setState(() => _isLoading = true);
-    final location = await MapService.getPlaceDetails(placeId);
-    if (!mounted) return;
-    if (location != null) {
-      debugPrint('✅ [Place Selected] ${location.name} → ${location.lat}, ${location.lng}');
-      widget.onSelect({
-        'name': mainText,
-        'city': '',
-        'lat': location.lat,
-        'lng': location.lng,
-        'placeId': placeId,
-      });
-      Navigator.pop(context);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not fetch location details. Try again.')),
-      );
-      setState(() => _isLoading = false);
-    }
+    // Dismiss modal IMMEDIATELY — fetch coordinates in background
+    setState(() => _isSelectingPlace = true);
+    
+    // Fire-and-forget: fetch then callback
+    MapService.getPlaceDetails(placeId).then((location) {
+      if (location != null) {
+        widget.onSelect({
+          'name': mainText,
+          'city': '',
+          'lat': location.lat,
+          'lng': location.lng,
+          'placeId': placeId,
+        });
+      }
+    });
+    
+    // Close sheet immediately — no waiting for network
+    Navigator.pop(context);
   }
 
   Future<void> _useCurrentLocation() async {
-    setState(() => _isLoading = true);
+    setState(() => _isSelectingPlace = true);
     try {
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
@@ -1257,17 +1302,18 @@ class _TravelerLocationSearchModalState extends State<_TravelerLocationSearchMod
         }
       }
       if (permission == LocationPermission.deniedForever) {
-        throw Exception('Location permissions are permanently denied');
+        throw Exception('Location permissions are permanently denied. Enable in Settings.');
       }
 
       Position position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.high,
         ),
-      ).timeout(const Duration(seconds: 4));
+      ).timeout(const Duration(seconds: 10));
 
       final location = await MapService.reverseGeocode(position.latitude, position.longitude);
-      if (location != null && mounted) {
+      if (!mounted) return;
+      if (location != null) {
         widget.onSelect({
           'name': location.name,
           'city': 'Detected',
@@ -1276,16 +1322,23 @@ class _TravelerLocationSearchModalState extends State<_TravelerLocationSearchMod
           'placeId': location.placeId,
         });
         Navigator.pop(context);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not determine address. Please search manually.'),
+          ),
+        );
+        setState(() => _isSelectingPlace = false);
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Failed to detect GPS location. Check permissions."),
+          SnackBar(
+            content: Text('Location error: ${e.toString().replaceAll('Exception: ', '')}'),
           ),
         );
+        setState(() => _isSelectingPlace = false);
       }
-      setState(() => _isLoading = false);
     }
   }
 
@@ -1314,7 +1367,7 @@ class _TravelerLocationSearchModalState extends State<_TravelerLocationSearchMod
               children: [
                 Icon(
                   widget.isFrom ? Icons.trip_origin : Icons.location_on,
-                  color: widget.isFrom ? const Color(0xFFF27F0D) : Colors.red,
+                  color: widget.isFrom ? const Color(0xFF2563EB) : Colors.red,
                 ),
                 const SizedBox(width: 12),
                 Text(
@@ -1343,13 +1396,18 @@ class _TravelerLocationSearchModalState extends State<_TravelerLocationSearchMod
                 hintText: "Search city or area...",
                 hintStyle: const TextStyle(color: Color(0xFF94A3B8)),
                 prefixIcon: const Icon(Icons.search, color: Color(0xFF64748B)),
-                suffixIcon: IconButton(
-                  icon: const Icon(Icons.clear, color: Color(0xFF94A3B8)),
-                  onPressed: () {
-                    _searchController.clear();
-                    setState(() => _predictions.clear());
-                  },
-                ),
+                suffixIcon: _isSearching
+                    ? const Padding(
+                        padding: EdgeInsets.all(12),
+                        child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFF05A4F))),
+                      )
+                    : IconButton(
+                        icon: const Icon(Icons.clear, color: Color(0xFF94A3B8)),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() => _predictions.clear());
+                        },
+                      ),
                 filled: true,
                 fillColor: const Color(0xFFF1F5F9),
                 border: OutlineInputBorder(
@@ -1361,9 +1419,16 @@ class _TravelerLocationSearchModalState extends State<_TravelerLocationSearchMod
           ),
           const SizedBox(height: 16),
           Expanded(
-            child: _isLoading
+            child: _isSelectingPlace
                 ? const Center(
-                    child: CircularProgressIndicator(color: Color(0xFFF27F0D)),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        CircularProgressIndicator(color: Color(0xFFF05A4F)),
+                        SizedBox(height: 12),
+                        Text("Getting location...", style: TextStyle(fontFamily: "Plus Jakarta Sans", fontSize: 14, color: Color(0xFF64748B))),
+                      ],
+                    ),
                   )
                 : Column(
                     children: [
@@ -1409,7 +1474,6 @@ class _TravelerLocationSearchModalState extends State<_TravelerLocationSearchMod
                           },
                         ),
                       ),
-                      // Required by Google Maps Platform ToS
                       if (_predictions.isNotEmpty) const GoogleAttribution(),
                     ],
                   ),

@@ -1,11 +1,11 @@
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/providers/user_profile_provider.dart';
-import 'service_selection_page.dart';
+import '../needin_express/identity_verification_page.dart';
+import 'email_otp_page.dart';
 
 class ProfileSetupPage extends StatefulWidget {
   const ProfileSetupPage({super.key});
@@ -18,10 +18,8 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _cityController = TextEditingController();
-  final TextEditingController _dobController = TextEditingController();
+  final TextEditingController _ageController = TextEditingController();
   bool _isLoading = false;
-  
-  bool _isEmailVerified = false;
   
   Uint8List? _selectedImageBytes;
   String? _selectedImageExt;
@@ -45,34 +43,8 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
         _nameController.text = profile['full_name'] ?? '';
         _emailController.text = profile['email'] ?? '';
         _cityController.text = profile['city'] ?? '';
-        _dobController.text = profile['date_of_birth'] ?? '';
+        _ageController.text = profile['age']?.toString() ?? '';
         _existingAvatarUrl = profile['profile_image_url'];
-      });
-    }
-  }
-
-  Future<void> _selectDate(BuildContext context) async {
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: DateTime(2000),
-      firstDate: DateTime(1900),
-      lastDate: DateTime.now(),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: Color(0xFFF27F0D), // header background color
-              onPrimary: Colors.white, // header text color
-              onSurface: Color(0xFF0F172A), // body text color
-            ),
-          ),
-          child: child!,
-        );
-      },
-    );
-    if (picked != null) {
-      setState(() {
-        _dobController.text = "${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}";
       });
     }
   }
@@ -93,7 +65,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
     }
   }
 
-  void _verifyEmailFormat() {
+  Future<void> _verifyEmailFlow() async {
     final email = _emailController.text.trim();
     if (email.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Enter an email address first")));
@@ -108,13 +80,61 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
       return;
     }
 
-    setState(() {
-      _isEmailVerified = true;
-    });
+    // CRITICAL FIX: Save the email to the DB first!
+    // The OTP verification relies on a Supabase RLS policy that matches the row
+    // using (email = auth.email()). If the row doesn't have the email yet,
+    // the OTP update will fail silently with 0 rows affected.
+    final userProfileProv = Provider.of<UserProfileProvider>(context, listen: false);
+    await userProfileProv.updateProfile(email: email);
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Email format verified successfully!")),
+    if (!mounted) return;
+    final success = await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => EmailOtpPage(email: email)),
     );
+
+    if (success == true && mounted) {
+      // Optimistic in-memory update — instant badge rendering
+      userProfileProv.markEmailVerified(email);
+      // Re-fetch to confirm DB persistence in background
+      userProfileProv.loadProfile();
+    }
+  }
+
+  /// Save profile — only include email if not yet verified.
+  /// If already verified, the email field is locked and must not be sent
+  /// (to prevent accidentally clearing email_verified in any edge case).
+  Future<void> _doSaveProfile(BuildContext ctx) async {
+    final userProviders = Provider.of<UserProfileProvider>(ctx, listen: false);
+    final emailToSave = userProviders.isEmailVerified ? null : _emailController.text.trim();
+
+    // CRITICAL FIX: Always write the Firebase phone number to profiles table.
+    // The phone is the user's primary identity (Firebase Auth).
+    // Without this, profiles.phone is null and the Call feature cannot
+    // prefill the traveler's number in the dialer.
+    final firebasePhone = AuthService().currentUser?.phoneNumber;
+
+    final success = await userProviders.updateProfile(
+      fullName: _nameController.text.trim(),
+      email: emailToSave,
+      city: _cityController.text.trim(),
+      age: int.tryParse(_ageController.text.trim()),
+      phone: firebasePhone, // always persist Firebase phone to DB
+      imageBytes: _selectedImageBytes,
+      imageExt: _selectedImageExt,
+    );
+
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+    if (success) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const IdentityVerificationPage()),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userProviders.error ?? 'Failed to save profile')),
+      );
+    }
   }
 
   @override
@@ -122,14 +142,14 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
     _nameController.dispose();
     _emailController.dispose();
     _cityController.dispose();
-    _dobController.dispose();
+    _ageController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F7F5), // background-light
+      backgroundColor: const Color(0xFFF8F7F5),
       body: SafeArea(
         bottom: false,
         child: Column(
@@ -148,7 +168,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                         shape: BoxShape.circle,
                         color: Colors.transparent,
                       ),
-                      child: const Icon(Icons.arrow_back, color: Color(0xFF0F172A)), // slate-900
+                      child: const Icon(Icons.arrow_back, color: Color(0xFF0F172A)),
                     ),
                   ),
                   const Expanded(
@@ -184,7 +204,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                           fontFamily: "Plus Jakarta Sans",
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
-                          color: Color(0xFFF27F0D), // primary
+                          color: Color(0xFFF05A4F),
                           letterSpacing: 0.5,
                         ),
                       ),
@@ -194,109 +214,89 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                           fontFamily: "Plus Jakarta Sans",
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
-                          color: Color(0xFF64748B), // slate-500
+                          color: Color(0xFF64748B),
                         ),
                       )
                     ],
                   ),
                   const SizedBox(height: 8),
                   Container(
-                    height: 6,
                     width: double.infinity,
+                    height: 6,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFE2E8F0), // slate-200
+                      color: const Color(0xFFE2E8F0),
                       borderRadius: BorderRadius.circular(3),
                     ),
-                    child: FractionallySizedBox(
-                      alignment: Alignment.centerLeft,
-                      widthFactor: 1.0,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF27F0D),
-                          borderRadius: BorderRadius.circular(3),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          flex: 3,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF05A4F),
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                          ),
                         ),
-                      ),
+                      ],
                     ),
                   ),
                 ],
               ),
             ),
             
-            /// Main Content
+            /// Scrollable Form
             Expanded(
               child: SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+                padding: const EdgeInsets.all(24),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Photo Uploader
-                    Column(
-                      children: [
+                    /// Avatar Picker — perfectly centered
+                    Center(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
                         GestureDetector(
                           onTap: _pickImage,
                           child: Stack(
-                            clipBehavior: Clip.none,
-                            alignment: Alignment.bottomRight,
                             children: [
                               Container(
-                                width: 128,
-                                height: 128,
+                                width: 100,
+                                height: 100,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
                                   color: const Color(0xFFE2E8F0),
                                   border: Border.all(color: Colors.white, width: 4),
-                                  image: _selectedImageBytes != null 
-                                    ? DecorationImage(
-                                        image: MemoryImage(_selectedImageBytes!),
-                                        fit: BoxFit.cover,
-                                      )
-                                    : null,
                                   boxShadow: [
                                     BoxShadow(
                                       color: Colors.black.withValues(alpha: 0.05),
-                                      blurRadius: 4,
-                                      spreadRadius: 1,
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 4),
                                     ),
                                   ],
                                 ),
-                                child: _selectedImageBytes == null
-                                    ? (_existingAvatarUrl != null
-                                        ? ClipOval(
-                                            child: Image.network(
-                                              _existingAvatarUrl!,
-                                              key: UniqueKey(),
-                                              fit: BoxFit.cover,
-                                            ),
-                                          )
-                                        : ClipOval(
-                                            child: Image.network(
-                                              "https://lh3.googleusercontent.com/aida-public/AB6AXuCiXQboTHMVvOvz98Tf7qBQAr2J2hNXDZt7Gzl58x2heZPaksl5C7V9VMmAtemoSvmE5jwQLAznwK4epiBe6ZBztyJnhzoO4RXsOL0WkITkVebLKV_DscNhNgMSjdbvW-X_Oy56XmmqJTrmmeLTaKJz_zF-iLQM0MAdIW5Ma6xODDc6Of0lIYSi34q-YH4qx6pcSFdXY9RU3u53WMFk4vJ5Env9AKFchXe7tFcwCRzfl9A-I9j-5NQGVth9aLi9HDjAuHU3xcmSHg",
-                                              key: UniqueKey(),
-                                              fit: BoxFit.cover,
-                                            ),
-                                          ))
-                                    : null,
+                                child: ClipOval(
+                                  child: _selectedImageBytes != null
+                                      ? Image.memory(_selectedImageBytes!, fit: BoxFit.cover)
+                                      : (_existingAvatarUrl != null && _existingAvatarUrl!.isNotEmpty
+                                          ? Image.network(_existingAvatarUrl!, fit: BoxFit.cover)
+                                          : const Icon(Icons.person, size: 50, color: Color(0xFF94A3B8))),
+                                ),
                               ),
-                              // Camera Badge
                               Positioned(
                                 bottom: 0,
                                 right: 0,
                                 child: Container(
-                                  padding: const EdgeInsets.all(8),
+                                  padding: const EdgeInsets.all(6),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFFF27F0D),
+                                    color: const Color(0xFFF05A4F),
                                     shape: BoxShape.circle,
                                     border: Border.all(color: Colors.white, width: 2),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withValues(alpha: 0.1),
-                                        blurRadius: 10,
-                                        offset: const Offset(0, 4),
-                                      )
-                                    ]
                                   ),
                                   child: const Icon(
-                                    Icons.photo_camera,
+                                    Icons.camera_alt,
                                     color: Colors.white,
                                     size: 20,
                                   ),
@@ -324,7 +324,8 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                             color: Color(0xFF64748B),
                           ),
                         ),
-                      ],
+                        ],
+                      ),
                     ),
                     const SizedBox(height: 32),
                     
@@ -336,22 +337,50 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                       controller: _nameController,
                     ),
                     const SizedBox(height: 20),
-                    _buildTextField(
-                      label: "Email Address",
-                      hintText: "jane@example.com",
-                      icon: Icons.mail,
-                      keyboardType: TextInputType.emailAddress,
-                      controller: _emailController,
-                      trailing: _isEmailVerified
-                          ? const Padding(
-                              padding: EdgeInsets.only(right: 16.0),
-                              child: Icon(Icons.check_circle, color: Colors.green),
-                            )
-                          : TextButton(
-                              onPressed: _verifyEmailFormat,
-                              child: const Text("Verify", style: TextStyle(color: Color(0xFFF27F0D))),
-                            ),
-                    ),
+                    // Email field: locked when verified, editable when not
+                    Builder(builder: (context) {
+                      final isVerified = context.watch<UserProfileProvider>().isEmailVerified;
+                      return _buildTextField(
+                        label: "Email Address",
+                        hintText: "jane@example.com",
+                        icon: Icons.mail,
+                        keyboardType: TextInputType.emailAddress,
+                        controller: _emailController,
+                        readOnly: isVerified, // lock when verified
+                        trailing: isVerified
+                            ? const Padding(
+                                padding: EdgeInsets.only(right: 12.0),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      "Verified",
+                                      style: TextStyle(
+                                        color: Color(0xFF16A34A),
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
+                                        fontFamily: 'Plus Jakarta Sans',
+                                      ),
+                                    ),
+                                    SizedBox(width: 4),
+                                    Icon(Icons.check_circle, color: Color(0xFF16A34A), size: 16),
+                                  ],
+                                ),
+                              )
+                            : TextButton(
+                                onPressed: _verifyEmailFlow,
+                                child: const Text(
+                                  "Verify Email",
+                                  style: TextStyle(
+                                    color: Color(0xFFF05A4F),
+                                    fontWeight: FontWeight.bold,
+                                    fontFamily: 'Plus Jakarta Sans',
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
+                      );
+                    }),
                     const SizedBox(height: 20),
                     _buildTextField(
                       label: "City",
@@ -361,21 +390,32 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                     ),
                     const SizedBox(height: 20),
                     _buildTextField(
-                      label: "Date of Birth",
-                      hintText: "YYYY-MM-DD",
-                      icon: Icons.calendar_today,
-                      controller: _dobController,
-                      readOnly: true,
-                      onTap: () => _selectDate(context),
+                      label: "Age",
+                      hintText: "25",
+                      icon: Icons.cake,
+                      controller: _ageController,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                     ),
                     const SizedBox(height: 20),
                     _buildTextField(
-                      label: "Phone Number",
+                      label: "Mobile Number",
                       hintText: "+1 234 567 8900",
                       icon: Icons.phone,
                       controller: TextEditingController(text: AuthService().currentUser?.phoneNumber ?? ''),
                       readOnly: true,
                       keyboardType: TextInputType.phone,
+                      trailing: const Padding(
+                        padding: EdgeInsets.only(right: 16.0),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text("Verified", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 12)),
+                            SizedBox(width: 4),
+                            Icon(Icons.check_circle, color: Colors.green, size: 16),
+                          ],
+                        ),
+                      ),
                     ),
                     
                     const SizedBox(height: 24),
@@ -384,14 +424,14 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF27F0D).withValues(alpha: 0.1),
+                        color: const Color(0xFFF05A4F).withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFF27F0D).withValues(alpha: 0.2)),
+                        border: Border.all(color: const Color(0xFFF05A4F).withValues(alpha: 0.2)),
                       ),
                       child: const Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(Icons.verified_user, color: Color(0xFFF27F0D), size: 20),
+                          Icon(Icons.verified_user, color: Color(0xFFF05A4F), size: 20),
                           SizedBox(width: 12),
                           Expanded(
                             child: Text(
@@ -399,7 +439,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                               style: TextStyle(
                                 fontFamily: "Plus Jakarta Sans",
                                 fontSize: 12,
-                                color: Color(0xFF475569), // slate-600
+                                color: Color(0xFF475569),
                                 height: 1.5,
                               ),
                             ),
@@ -426,10 +466,10 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
             height: 56,
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFF27F0D),
+                backgroundColor: const Color(0xFFF05A4F),
                 foregroundColor: Colors.white,
                 elevation: 8,
-                shadowColor: const Color(0xFFF27F0D).withValues(alpha: 0.2),
+                shadowColor: const Color(0xFFF05A4F).withValues(alpha: 0.2),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -438,73 +478,38 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                   ? null
                   : () async {
                       final name = _nameController.text.trim();
-                      final email = _emailController.text.trim();
                       final city = _cityController.text.trim();
-                      final dob = _dobController.text.trim();
+                      final ageStr = _ageController.text.trim();
 
-                      if (name.isEmpty || email.isEmpty || city.isEmpty || dob.isEmpty) {
+                      if (name.isEmpty || city.isEmpty || ageStr.isEmpty) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text("All fields are required")),
+                          const SnackBar(content: Text("Name, City, and Age are required")),
                         );
                         return;
                       }
 
-                      final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+$');
-                      if (!emailRegex.hasMatch(email)) {
+                      final ageVal = int.tryParse(ageStr);
+                      if (ageVal == null || ageVal < 18 || ageVal > 100) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text("Please enter a valid email address")),
+                          const SnackBar(content: Text("Age must be between 18 and 100")),
                         );
                         return;
                       }
 
-                      setState(() {
-                        _isLoading = true;
-                      });
-
-                      final userProviders = Provider.of<UserProfileProvider>(context, listen: false);
-
-                      final phone = AuthService().currentUser?.phoneNumber;
-
-                      final success = await userProviders.updateProfile(
-                        fullName: name,
-                        email: email,
-                        city: city,
-                        phone: phone,
-                        dateOfBirth: dob,
-                        imageBytes: _selectedImageBytes,
-                        imageExt: _selectedImageExt,
-                      );
-
-                      if (!context.mounted) return;
-
-                      setState(() {
-                        _isLoading = false;
-                      });
-
-                      if (success) {
-                        // Mark profile setup as complete locally
-                        final uid = AuthService().currentUser?.uid ?? 'test_user_id';
-                        final prefs = await SharedPreferences.getInstance();
-                        await prefs.setBool('profile_setup_complete_$uid', true);
-
-                        if (!context.mounted) return;
-
-                        Navigator.pushAndRemoveUntil(context,
-                          MaterialPageRoute(
-                            builder: (_) => const ServiceSelectionPage(),
-                          ),
-                          (route) => false,
-                        );
-                      } else {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text("Failed to update profile. ${userProviders.error}")),
-                        );
-                      }
+                      setState(() => _isLoading = true);
+                      _doSaveProfile(context);
                     },
               child: _isLoading
-                  ? const CircularProgressIndicator(color: Colors.white)
+                  ? const SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    )
                   : const Text(
-                      "Finish Setup",
+                      "Continue",
                       style: TextStyle(
                         fontFamily: "Plus Jakarta Sans",
                         fontSize: 16,
@@ -522,50 +527,59 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
     required String label,
     required String hintText,
     required IconData icon,
-    TextInputType? keyboardType,
     TextEditingController? controller,
-    Widget? trailing,
+    TextInputType keyboardType = TextInputType.text,
     bool readOnly = false,
     VoidCallback? onTap,
+    Widget? trailing,
+    List<TextInputFormatter>? inputFormatters,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 6),
-          child: Text(
-            label,
-            style: const TextStyle(
-              fontFamily: "Plus Jakarta Sans",
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF0F172A),
-            ),
+        Text(
+          label,
+          style: const TextStyle(
+            fontFamily: "Plus Jakarta Sans",
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF0F172A),
           ),
         ),
+        const SizedBox(height: 8),
         Container(
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: readOnly ? const Color(0xFFF1F5F9) : Colors.white,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: const Color(0xFFE2E8F0)),
+            boxShadow: readOnly
+                ? null
+                : [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.02),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
           ),
           child: TextField(
             controller: controller,
             keyboardType: keyboardType,
             readOnly: readOnly,
             onTap: onTap,
-            style: const TextStyle(
+            inputFormatters: inputFormatters,
+            style: TextStyle(
               fontFamily: "Plus Jakarta Sans",
               fontSize: 16,
-              color: Color(0xFF0F172A),
+              color: readOnly ? const Color(0xFF64748B) : const Color(0xFF0F172A),
             ),
             decoration: InputDecoration(
               hintText: hintText,
               hintStyle: const TextStyle(color: Color(0xFF94A3B8)),
               border: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
               prefixIcon: Icon(icon, color: const Color(0xFF94A3B8), size: 20),
               suffixIcon: trailing,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             ),
           ),
         ),

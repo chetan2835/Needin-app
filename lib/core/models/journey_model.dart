@@ -3,6 +3,8 @@
 //  Maps 1:1 to Supabase 'journeys' table
 // ══════════════════════════════════════════════════════════════
 
+import '../constants/ui_utils.dart';
+
 class Journey {
   final String id;
   final String driverId;
@@ -27,7 +29,7 @@ class Journey {
   final String? dimensions;
   final String? pickupFlexibility;
   final String? dropoffFlexibility;
-  final String? acceptableParcelSizes;
+  final List<String>? acceptableParcelSizes;
   final String? additionalNotes;
   final double? priceMedium;
   final double? priceSmall;
@@ -98,7 +100,9 @@ class Journey {
       dimensions: json['dimensions']?.toString(),
       pickupFlexibility: json['pickup_flexibility']?.toString(),
       dropoffFlexibility: json['dropoff_flexibility']?.toString(),
-      acceptableParcelSizes: json['acceptable_parcel_sizes']?.toString(),
+      acceptableParcelSizes: json['acceptable_parcel_sizes'] is List
+          ? List<String>.from(json['acceptable_parcel_sizes'])
+          : json['acceptable_parcel_sizes']?.toString().split(', ').where((s) => s.isNotEmpty).toList(),
       additionalNotes: json['additional_notes']?.toString(),
       priceMedium: (json['price_medium'] as num?)?.toDouble(),
       priceSmall: (json['price_small'] as num?)?.toDouble(),
@@ -136,29 +140,7 @@ class Journey {
   /// Friendly formatted departure time
   String get formattedDepartureTime {
     if (departureTime == null) return 'Not set';
-    try {
-      final dt = DateTime.parse(departureTime!);
-      final months = [
-        "Jan",
-        "Feb",
-        "Mar",
-        "Apr",
-        "May",
-        "Jun",
-        "Jul",
-        "Aug",
-        "Sep",
-        "Oct",
-        "Nov",
-        "Dec",
-      ];
-      final ampm = dt.hour >= 12 ? "PM" : "AM";
-      final hour12 = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
-      final minute = dt.minute.toString().padLeft(2, '0');
-      return "${months[dt.month - 1]} ${dt.day}, $hour12:$minute $ampm";
-    } catch (_) {
-      return departureTime!;
-    }
+    return UIUtils.formatJourneyDateTime(departureTime);
   }
 
   /// Earnings range text

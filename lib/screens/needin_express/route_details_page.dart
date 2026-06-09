@@ -88,7 +88,7 @@ class _RouteDetailsPageState extends State<RouteDetailsPage> {
                           "Select Date",
                           style: TextStyle(fontFamily: "Inter", color: Color(0xFF6B5E52)),
                         ),
-                        trailing: const Icon(Icons.calendar_today, color: Color(0xFFFF8000)),
+                        trailing: const Icon(Icons.calendar_today, color: Color(0xFFF05A4F)),
                         onTap: () async {
                           await showDatePicker(
                             context: context,
@@ -107,7 +107,7 @@ class _RouteDetailsPageState extends State<RouteDetailsPage> {
               padding: const EdgeInsets.all(24),
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFF8000),
+                  backgroundColor: const Color(0xFFF05A4F),
                   foregroundColor: Colors.white,
                   minimumSize: const Size(double.infinity, 56),
                   shape: RoundedRectangleBorder(
@@ -163,7 +163,7 @@ class _RouteDetailsPageState extends State<RouteDetailsPage> {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFFFF8000), width: 2),
+          borderSide: const BorderSide(color: Color(0xFFF05A4F), width: 2),
         ),
         filled: true,
         fillColor: Colors.white,

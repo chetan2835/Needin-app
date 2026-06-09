@@ -16,11 +16,11 @@ import 'package:flutter/material.dart';
 class NeedinColors {
   NeedinColors._();
 
-  static const Color primary = Color(0xFFF27F0D);
+  static const Color primary = Color(0xFFF05A4F);
   static const Color coral = Color(0xFFF27462);
   static const Color deepCoral = Color(0xFFE85D4A);
   static const Color gold = Color(0xFFD4A641);
-  static const Color cream = Color(0xFFFFF8F0);
+  static const Color cream = Color(0xFFFFF5F4);
   static const Color darkText = Color(0xFF0F172A);
   static const Color subtleGrey = Color(0xFF64748B);
   static const Color background = Color(0xFFF8F7F5);
@@ -172,7 +172,7 @@ class NeedinGlow extends StatefulWidget {
   const NeedinGlow({
     super.key,
     required this.child,
-    this.color = const Color(0xFFF27F0D),
+    this.color = const Color(0xFFF05A4F),
     this.duration = const Duration(milliseconds: 2200),
     this.minBlur = 20,
     this.maxBlur = 50,
@@ -245,7 +245,7 @@ class NeedinParticles extends StatefulWidget {
   const NeedinParticles({
     super.key,
     this.count = 20,
-    this.color = const Color(0xFFF27F0D),
+    this.color = const Color(0xFFF05A4F),
     this.maxSize = 6,
   });
 
@@ -390,7 +390,7 @@ class NeedinLoader extends StatefulWidget {
   const NeedinLoader({
     super.key,
     this.size = 24,
-    this.color = const Color(0xFFF27F0D),
+    this.color = const Color(0xFFF05A4F),
   });
 
   @override

@@ -3,7 +3,7 @@ description: Needin Logistics App
 
 publish_to: 'none'
 
-version: 1.0.0+1
+version: 2.5.0+3
 
 environment:
   sdk: ">=3.10.7 <4.0.0"
@@ -27,16 +27,25 @@ dependencies:
   uuid: ^4.5.3
   intl: ^0.20.2
   http: ^1.6.0
+  crypto: ^3.0.6
   flutter_polyline_points: ^3.1.0
   flutter_dotenv: ^5.2.1
   cached_network_image: ^3.4.1
   flutter_image_compress: ^2.3.0
-  google_places_sdk_plus: ^1.1.0
+  firebase_messaging: ^16.1.2
+  flutter_local_notifications: ^18.0.1
+  vibration: ^2.0.1
+  flutter_markdown: ^0.7.7+1
+  share_plus: ^12.0.2
+  path_provider: ^2.1.5
+  pdf: ^3.12.0
+  sendotp_flutter_sdk: ^0.0.2
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
+  flutter_launcher_icons: ^0.14.3
 
 flutter:
 
@@ -58,3 +67,10 @@ flutter:
       fonts:
         - asset: assets/fonts/PlusJakartaSans-Regular.ttf
         - asset: assets/fonts/PlusJakartaSans-Bold.ttf
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/images/needin logo popup.png"
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/images/needin logo popup.png"

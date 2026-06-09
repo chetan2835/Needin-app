@@ -15,6 +15,11 @@ class _LoginPageState extends State<LoginPage> {
   final TextEditingController _phoneController = TextEditingController();
 
   @override
+  void initState() {
+    super.initState();
+  }
+
+  @override
   void dispose() {
     _phoneController.dispose();
     super.dispose();
@@ -47,35 +52,78 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
 
-    final formattedPhone = "+91$cleanPhone";
+    // Guard against duplicate taps
+    if (_isLoading) return;
 
     setState(() {
       _isLoading = true;
     });
 
-    AuthService().verifyPhoneNumber(
-      phoneNumber: formattedPhone,
-      codeSent: (verificationId) {
-        if (!mounted) return;
-        setState(() {
-          _isLoading = false;
-        });
-        Navigator.push(context,
-          MaterialPageRoute(
-            builder: (_) => OtpPage(phoneNumber: formattedPhone),
+    // Premium loading animation delay
+    await Future.delayed(const Duration(seconds: 1));
+    if (!mounted) return;
+
+    final result = await AuthService().sendOTP(cleanPhone);
+
+    if (!mounted) return;
+
+    if (result.success) {
+      // ── CRITICAL GUARD: never navigate without a valid reqId ────────────
+      final reqId = result.reqId ?? '';
+      debugPrint('MSG91_TRACE: EXTRACTED REQID FROM SEND RESPONSE: $reqId');
+      
+      if (reqId.isEmpty) {
+        setState(() { _isLoading = false; });
+        debugPrint('MSG91_TRACE: ❌ LOGIN PAGE GUARD FAILED -> reqId is EMPTY');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('OTP sent but session token missing. Please try again or restart the app.'),
+            backgroundColor: Color(0xFFEF4444),
+            duration: Duration(seconds: 4),
           ),
         );
-      },
-      verificationFailed: (error) {
-        if (!mounted) return;
-        setState(() {
-          _isLoading = false;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to send OTP: $error')),
-        );
-      },
-    );
+        return;
+      }
+
+      debugPrint('MSG91_TRACE: ✅ LOGIN PAGE GUARD PASSED -> Navigating to OTP page');
+      debugPrint('MSG91_TRACE: NAVIGATION REQID: $reqId');
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('OTP Sent Successfully'),
+          backgroundColor: Color(0xFF22C55E),
+        ),
+      );
+
+      await Future.delayed(const Duration(milliseconds: 500));
+      if (!mounted) return;
+
+      setState(() {
+        _isLoading = false;
+      });
+
+      final formattedPhone = '+91$cleanPhone';
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => OtpPage(
+            phoneNumber: formattedPhone,
+            phone10: cleanPhone,
+            reqId: reqId,
+          ),
+        ),
+      );
+    } else {
+      setState(() {
+        _isLoading = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result.errorMessage ?? 'Failed to send OTP. Please try again.'),
+          backgroundColor: const Color(0xFFEF4444),
+        ),
+      );
+    }
   }
 
   @override
@@ -95,21 +143,44 @@ class _LoginPageState extends State<LoginPage> {
                   child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const SizedBox(height: 48),
+                    if (Navigator.canPop(context)) ...[
+                      const SizedBox(height: 16),
+                      GestureDetector(
+                        onTap: () => Navigator.pop(context),
+                        child: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                          ),
+                          child: const Center(
+                            child: Icon(
+                              Icons.arrow_back,
+                              color: Color(0xFF0F172A),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ] else ...[
+                      const SizedBox(height: 48),
+                    ],
 
                     // Icon Container
                     Container(
                       width: 64, // w-16
                       height: 64, // h-16
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFFF1E3), // primary-light
+                        color: const Color(0xFFFDE8E7), // primary-light
                         borderRadius: BorderRadius.circular(16), // 2xl
                       ),
-                      child: const Center(
-                        child: Icon(
-                          Icons.local_shipping,
-                          color: Color(0xFFF27F0D), // primary
-                          size: 36, // 4xl
+                      child: Center(
+                        child: Image.asset(
+                          'assets/images/needin logo popup.png',
+                          width: 36,
+                          height: 36,
+                          fit: BoxFit.contain,
                         ),
                       ),
                     ),
@@ -130,7 +201,7 @@ class _LoginPageState extends State<LoginPage> {
                           TextSpan(text: "Welcome to "),
                           TextSpan(
                             text: "NEEDIN",
-                            style: TextStyle(color: Color(0xFFF27F0D)), // primary
+                            style: TextStyle(color: Color(0xFFF05A4F)), // primary
                           ),
                         ],
                       ),
@@ -239,24 +310,41 @@ class _LoginPageState extends State<LoginPage> {
 
                     const SizedBox(height: 32),
 
-                    // Send OTP Button -> Login with MPIN
+                    // Send OTP Button -> Login with OTP
                     SizedBox(
                       width: double.infinity,
                       height: 56, // py-4
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFF27F0D),
+                          backgroundColor: const Color(0xFFF05A4F),
                           foregroundColor: Colors.white,
                           elevation: 8,
                           shadowColor:
-                              const Color(0xFFF27F0D).withValues(alpha: 0.15),
+                              const Color(0xFFF05A4F).withValues(alpha: 0.15),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12), // xl
                           ),
                         ),
                         onPressed: _isLoading ? null : _sendOtp,
                         child: _isLoading
-                            ? const CircularProgressIndicator(color: Colors.white)
+                            ? const Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  SizedBox(
+                                    width: 20, height: 20,
+                                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+                                  ),
+                                  SizedBox(width: 12),
+                                  Text(
+                                    "Sending OTP...",
+                                    style: TextStyle(
+                                      fontFamily: "Plus Jakarta Sans",
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              )
                             : const Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
@@ -296,13 +384,13 @@ class _LoginPageState extends State<LoginPage> {
                               TextSpan(
                                 text: "Terms of Service",
                                 style: TextStyle(
-                                    color: Color(0xFFF27F0D)), // primary
+                                    color: Color(0xFFF05A4F)), // primary
                               ),
                               TextSpan(text: " and\n"),
                               TextSpan(
                                 text: "Privacy Policy",
                                 style: TextStyle(
-                                    color: Color(0xFFF27F0D)), // primary
+                                    color: Color(0xFFF05A4F)), // primary
                               ),
                               TextSpan(text: "."),
                             ],

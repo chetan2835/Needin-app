@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import '../../core/services/map_marker_factory.dart';
 
 class RouteMapPreviewPage extends StatefulWidget {
   const RouteMapPreviewPage({super.key});
@@ -12,22 +13,28 @@ class _RouteMapPreviewPageState extends State<RouteMapPreviewPage> {
   GoogleMapController? _mapController;
 
   static const CameraPosition _initialPosition = CameraPosition(
-    target: LatLng(41.8781, -87.6298), // Chicago
+    target: LatLng(23.0225, 72.5714), // Ahmedabad, India
     zoom: 6.0,
   );
 
-  final Set<Marker> _markers = {
-    const Marker(
-      markerId: MarkerId('start'),
-      position: LatLng(41.8781, -87.6298),
-      infoWindow: InfoWindow(title: 'Chicago, IL (Departing)'),
-    ),
-    const Marker(
-      markerId: MarkerId('end'),
-      position: LatLng(42.3314, -83.0458),
-      infoWindow: InfoWindow(title: 'Detroit, MI (Arriving)'),
-    ),
-  };
+  late final Set<Marker> _markers;
+
+  @override
+  void initState() {
+    super.initState();
+    _markers = {
+      MapMarkerFactory.createPickupMarker(
+        position: const LatLng(28.6139, 77.2090),
+        title: 'Delhi (Departing)',
+        markerId: 'start',
+      ),
+      MapMarkerFactory.createDropMarker(
+        position: const LatLng(19.0760, 72.8777),
+        title: 'Mumbai (Arriving)',
+        markerId: 'end',
+      ),
+    };
+  }
 
   @override
   void dispose() {
@@ -86,7 +93,7 @@ class _RouteMapPreviewPageState extends State<RouteMapPreviewPage> {
                                 fontFamily: "Inter",
                                 fontSize: 12,
                                 fontWeight: FontWeight.w500,
-                                color: Color(0xFFFF8000), // primary
+                                color: Color(0xFFF05A4F), // primary
                               ),
                             ),
                             Text(
@@ -108,7 +115,7 @@ class _RouteMapPreviewPageState extends State<RouteMapPreviewPage> {
                                 margin: EdgeInsets.only(right: index < 7 ? 6.0 : 0),
                                 height: 6,
                                 decoration: BoxDecoration(
-                                  color: index < 4 ? const Color(0xFFFF8000) : Colors.grey.shade200,
+                                  color: index < 4 ? Colors.green : Colors.grey.shade200,
                                   borderRadius: BorderRadius.circular(9999),
                                 ),
                               ),
@@ -150,7 +157,7 @@ class _RouteMapPreviewPageState extends State<RouteMapPreviewPage> {
                         decoration: BoxDecoration(
                           color: Colors.white.withValues(alpha: 0.9),
                           borderRadius: BorderRadius.circular(9999),
-                          border: Border.all(color: const Color(0xFFFF8000).withValues(alpha: 0.2)),
+                          border: Border.all(color: const Color(0xFFF05A4F).withValues(alpha: 0.2)),
                           boxShadow: [
                             BoxShadow(
                               color: Colors.black.withValues(alpha: 0.05),
@@ -161,7 +168,7 @@ class _RouteMapPreviewPageState extends State<RouteMapPreviewPage> {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: const [
-                            Icon(Icons.gesture, color: Color(0xFFFF8000), size: 16),
+                            Icon(Icons.gesture, color: Color(0xFFF05A4F), size: 16),
                             SizedBox(width: 8),
                             Text(
                               "Drag the route line to adjust",
@@ -193,7 +200,7 @@ class _RouteMapPreviewPageState extends State<RouteMapPreviewPage> {
                               CameraUpdate.newCameraPosition(_initialPosition),
                             );
                           },
-                          child: const Icon(Icons.my_location, color: Color(0xFFFF8000)),
+                          child: const Icon(Icons.my_location, color: Color(0xFFF05A4F)),
                         ),
                         const SizedBox(height: 8),
                         Container(
@@ -272,10 +279,10 @@ class _RouteMapPreviewPageState extends State<RouteMapPreviewPage> {
                                         width: 56,
                                         height: 56,
                                         decoration: BoxDecoration(
-                                          color: const Color(0xFFFF8000).withValues(alpha: 0.1),
+                                          color: const Color(0xFFF05A4F).withValues(alpha: 0.1),
                                           borderRadius: BorderRadius.circular(12),
                                         ),
-                                        child: const Icon(Icons.directions_car, color: Color(0xFFFF8000), size: 32),
+                                        child: const Icon(Icons.directions_car, color: Color(0xFFF05A4F), size: 32),
                                       ),
                                       const SizedBox(width: 16),
                                       Expanded(
@@ -283,7 +290,7 @@ class _RouteMapPreviewPageState extends State<RouteMapPreviewPage> {
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
                                             const Text(
-                                              "Chicago to Detroit",
+                                              "Delhi to Mumbai",
                                               style: TextStyle(
                                                 fontFamily: "Inter",
                                                 fontSize: 20,
@@ -324,7 +331,7 @@ class _RouteMapPreviewPageState extends State<RouteMapPreviewPage> {
                                         ),
                                       ),
                                       IconButton(
-                                        icon: const Icon(Icons.edit, color: Color(0xFFFF8000)),
+                                        icon: const Icon(Icons.edit, color: Color(0xFFF05A4F)),
                                         onPressed: () {},
                                       ),
                                     ],
@@ -353,8 +360,8 @@ class _RouteMapPreviewPageState extends State<RouteMapPreviewPage> {
                                             height: 12,
                                             decoration: BoxDecoration(
                                               shape: BoxShape.circle,
-                                              border: Border.all(color: const Color(0xFFFF8000), width: 2),
-                                              color: const Color(0xFFFF8000),
+                                              border: Border.all(color: const Color(0xFFF05A4F), width: 2),
+                                              color: const Color(0xFFF05A4F),
                                             ),
                                           ),
                                         ],
@@ -369,7 +376,7 @@ class _RouteMapPreviewPageState extends State<RouteMapPreviewPage> {
                                                 text: "Departing from ",
                                                 style: const TextStyle(fontFamily: "Inter", fontSize: 14, color: Color(0xFF6B7280)),
                                                 children: const [
-                                                  TextSpan(text: "Chicago, IL", style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1F2937))),
+                                                  TextSpan(text: "Delhi", style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1F2937))),
                                                 ],
                                               ),
                                             ),
@@ -379,7 +386,7 @@ class _RouteMapPreviewPageState extends State<RouteMapPreviewPage> {
                                                 text: "Arriving at ",
                                                 style: const TextStyle(fontFamily: "Inter", fontSize: 14, color: Color(0xFF6B7280)),
                                                 children: const [
-                                                  TextSpan(text: "Detroit, MI", style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1F2937))),
+                                                  TextSpan(text: "Mumbai", style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1F2937))),
                                                 ],
                                               ),
                                             ),
@@ -393,11 +400,11 @@ class _RouteMapPreviewPageState extends State<RouteMapPreviewPage> {
                                   /// Primary Action
                                   ElevatedButton(
                                     style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color(0xFFFF8000),
+                                      backgroundColor: const Color(0xFFF05A4F),
                                       foregroundColor: Colors.white,
                                       minimumSize: const Size(double.infinity, 56),
                                       elevation: 8,
-                                      shadowColor: const Color(0xFFFF8000).withValues(alpha: 0.3),
+                                      shadowColor: const Color(0xFFF05A4F).withValues(alpha: 0.3),
                                       shape: RoundedRectangleBorder(
                                         borderRadius: BorderRadius.circular(12),
                                       ),

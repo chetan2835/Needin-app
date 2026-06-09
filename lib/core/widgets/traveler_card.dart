@@ -94,7 +94,7 @@ class TravelerCard extends StatelessWidget {
           
           Row(
             children: [
-              const Icon(Icons.flight_takeoff, color: Color(0xFFF27F0D), size: 16),
+              const Icon(Icons.flight_takeoff, color: Color(0xFFF05A4F), size: 16),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -113,7 +113,7 @@ class TravelerCard extends StatelessWidget {
           const SizedBox(height: 8),
           Row(
             children: [
-              const Icon(Icons.flight_land, color: Color(0xFFF27F0D), size: 16),
+              const Icon(Icons.flight_land, color: Color(0xFFF05A4F), size: 16),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(

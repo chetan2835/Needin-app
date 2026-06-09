@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'confirm_post_journey_page.dart';
+import 'package:provider/provider.dart';
+import '../../core/providers/journey_draft_provider.dart';
+
 
 class AdditionalNotesPage extends StatefulWidget {
   final Map<String, dynamic> journeyData;
@@ -23,6 +26,14 @@ class _AdditionalNotesPageState extends State<AdditionalNotesPage>
   @override
   void initState() {
     super.initState();
+    // Seed controller from the journey draft so the note survives
+    // back/forward navigation between steps.
+    final existingNote = widget.journeyData['additional_notes']?.toString() ?? '';
+    _notesController.text = existingNote;
+    if (existingNote.isNotEmpty) {
+      _checkPrivacy(existingNote);
+    }
+    // ────────────────────────────────────────────────────────────
     _animController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 600),
@@ -80,7 +91,7 @@ class _AdditionalNotesPageState extends State<AdditionalNotesPage>
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: const Row(
             children: [
-              Icon(Icons.privacy_tip, color: Color(0xFFF27F0D)),
+              Icon(Icons.privacy_tip, color: Color(0xFFF05A4F)),
               SizedBox(width: 8),
               Text("Privacy Warning", style: TextStyle(fontFamily: "Plus Jakarta Sans")),
             ],
@@ -95,7 +106,7 @@ class _AdditionalNotesPageState extends State<AdditionalNotesPage>
               child: const Text("Edit Notes", style: TextStyle(color: Color(0xFF64748B))),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF27F0D)),
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF05A4F)),
               onPressed: () => Navigator.pop(ctx, true),
               child: const Text("Continue Anyway", style: TextStyle(color: Colors.white)),
             ),
@@ -103,14 +114,17 @@ class _AdditionalNotesPageState extends State<AdditionalNotesPage>
         ),
       );
       if (proceed != true) return;
+      if (!mounted) return;
     }
 
     setState(() => _isLoading = true);
 
-    final finalJourneyData = Map<String, dynamic>.from(widget.journeyData);
+    final provider = Provider.of<JourneyDraftProvider>(context, listen: false);
     final notes = _notesController.text.trim();
     if (notes.isNotEmpty) {
-      finalJourneyData['additional_notes'] = notes;
+      provider.updateField('additional_notes', notes);
+    } else {
+      provider.updateField('additional_notes', null);
     }
 
     if (mounted) {
@@ -118,7 +132,7 @@ class _AdditionalNotesPageState extends State<AdditionalNotesPage>
       Navigator.push(
         context,
         PageRouteBuilder(
-          pageBuilder: (_, __, ___) => ConfirmPostJourneyPage(journeyData: finalJourneyData),
+          pageBuilder: (_, __, ___) => ConfirmPostJourneyPage(journeyData: provider.draftData),
           transitionDuration: const Duration(milliseconds: 400),
           transitionsBuilder: (_, animation, __, child) {
             return FadeTransition(
@@ -135,9 +149,27 @@ class _AdditionalNotesPageState extends State<AdditionalNotesPage>
     }
   }
 
+  // Write current note back to provider so callers can re-seed it
+  void _saveNoteToData() {
+    final provider = Provider.of<JourneyDraftProvider>(context, listen: false);
+    final text = _notesController.text.trim();
+    if (text.isNotEmpty) {
+      provider.updateField('additional_notes', text);
+    } else {
+      provider.updateField('additional_notes', null);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(
+      canPop: true,
+      onPopInvokedWithResult: (didPop, result) {
+        // Persist note into the shared journeyData map so Step 5 can
+        // pass it back when the user re-enters Step 6.
+        _saveNoteToData();
+      },
+      child: Scaffold(
       backgroundColor: const Color(0xFFFAFAFA),
       body: SafeArea(
         bottom: false,
@@ -150,7 +182,10 @@ class _AdditionalNotesPageState extends State<AdditionalNotesPage>
               child: Row(
                 children: [
                   GestureDetector(
-                    onTap: () => Navigator.pop(context),
+                    onTap: () {
+                      _saveNoteToData();
+                      Navigator.pop(context);
+                    },
                     child: Container(
                       width: 40,
                       height: 40,
@@ -185,7 +220,7 @@ class _AdditionalNotesPageState extends State<AdditionalNotesPage>
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: const [
-                      Text("Step 10 of 11", style: TextStyle(fontFamily: "Plus Jakarta Sans", fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFF27F0D))),
+                      Text("Step 6 of 7", style: TextStyle(fontFamily: "Plus Jakarta Sans", fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF22C55E))),
                       Text("Almost there", style: TextStyle(fontFamily: "Plus Jakarta Sans", fontSize: 12, fontWeight: FontWeight.w500, color: Color(0xFF64748B))),
                     ],
                   ),
@@ -196,8 +231,8 @@ class _AdditionalNotesPageState extends State<AdditionalNotesPage>
                     decoration: BoxDecoration(color: const Color(0xFFE2E8F0), borderRadius: BorderRadius.circular(3)),
                     child: FractionallySizedBox(
                       alignment: Alignment.centerLeft,
-                      widthFactor: 0.90,
-                      child: Container(decoration: BoxDecoration(color: const Color(0xFFF27F0D), borderRadius: BorderRadius.circular(3))),
+                      widthFactor: 0.86,
+                      child: Container(decoration: BoxDecoration(color: const Color(0xFF22C55E), borderRadius: BorderRadius.circular(3))),
                     ),
                   ),
                 ],
@@ -306,14 +341,14 @@ class _AdditionalNotesPageState extends State<AdditionalNotesPage>
                           Container(
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFF27F0D).withValues(alpha: 0.05),
+                              color: const Color(0xFFF05A4F).withValues(alpha: 0.05),
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: const Color(0xFFF27F0D).withValues(alpha: 0.2)),
+                              border: Border.all(color: const Color(0xFFF05A4F).withValues(alpha: 0.2)),
                             ),
                             child: Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Icon(Icons.warning, color: Color(0xFFF27F0D), size: 20),
+                                const Icon(Icons.warning, color: Color(0xFFF05A4F), size: 20),
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: Column(
@@ -349,10 +384,10 @@ class _AdditionalNotesPageState extends State<AdditionalNotesPage>
           width: double.infinity,
           child: ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFF27F0D),
+              backgroundColor: const Color(0xFFF05A4F),
               foregroundColor: Colors.white,
               elevation: 4,
-              shadowColor: const Color(0xFFF27F0D).withValues(alpha: 0.4),
+              shadowColor: const Color(0xFFF05A4F).withValues(alpha: 0.4),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
             ),
             onPressed: _isLoading ? null : _submitJourney,
@@ -366,6 +401,7 @@ class _AdditionalNotesPageState extends State<AdditionalNotesPage>
           ),
         ),
       ),
-    );
+      ),
+    ); // end PopScope
   }
 }

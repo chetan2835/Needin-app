@@ -1,15 +1,13 @@
-import 'dart:typed_data';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../core/constants/ui_utils.dart';
 import '../../core/widgets/custom_text_field.dart';
-import '../../core/widgets/mpin_input_widget.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/supabase_service.dart';
 import '../../core/services/local_storage_service.dart';
 import '../login/service_selection_page.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AccountDetailsScreen extends StatefulWidget {
   const AccountDetailsScreen({super.key});
@@ -25,9 +23,6 @@ class _AccountDetailsScreenState extends State<AccountDetailsScreen>
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
   final _cityController = TextEditingController();
-
-  String _mpin = "";
-  String _confirmMpin = "";
 
   Uint8List? _imageBytes;
   String? _imageExt;
@@ -77,50 +72,23 @@ class _AccountDetailsScreenState extends State<AccountDetailsScreen>
 
   void _submitData() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_mpin.length != 4) {
-      UIUtils.showError(context, 'Please enter a 4-digit MPIN');
-      return;
-    }
-    if (_mpin != _confirmMpin) {
-      UIUtils.showError(context, 'MPINs do not match');
-      return;
-    }
 
     setState(() => _isLoading = true);
 
-    final phoneText = _phoneController.text.trim();
-    final formattedPhone = "+91$phoneText";
-
     try {
-      // Bypass OTP: Directly create account
-      await _createAccountDirectly(formattedPhone);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-      UIUtils.showError(context, 'Error creating account: $e');
-    }
-  }
-
-  Future<void> _createAccountDirectly(String phone) async {
-    try {
-      String? userId;
-      
-      // Get or create Firebase user
+      // Get Firebase authenticated user (set during OTP verification)
       final currentUser = AuthService().currentUser;
-      if (currentUser != null) {
-        userId = currentUser.uid;
-      } else {
-        final cred = await AuthService().signInAnonymously();
-        userId = cred?.user?.uid;
-      }
-
-      if (userId == null) {
+      if (currentUser == null) {
         if (!mounted) return;
         setState(() => _isLoading = false);
-        UIUtils.showError(context, 'Authentication failed');
+        UIUtils.showError(context, 'Session expired. Please log in again.');
         return;
       }
 
+      final userId = currentUser.uid;
+      final phone = currentUser.phoneNumber;
+
+      // Upload profile picture if selected
       String? photoUrl;
       if (_imageBytes != null && _imageExt != null) {
         photoUrl = await SupabaseService().uploadProfilePicture(
@@ -129,42 +97,59 @@ class _AccountDetailsScreenState extends State<AccountDetailsScreen>
           _imageExt!,
         );
       }
-      
+
+      // Upsert base profile in Supabase
       await SupabaseService().upsertUserProfile(
         userId: userId,
+        fullName: _nameController.text.trim(),
+        email: _emailController.text.trim(),
+        city: _cityController.text.trim(),
         phone: phone,
+        profileImageUrl: photoUrl,
       );
 
-      // Bypass edge function to avoid 401 Unauthorized errors 
-      // since JWT verification cannot be disabled without the CLI.
-      debugPrint("Bypassing create-account edge function to avoid 401 error.");
-      
-      final data = {'success': true};
-
-      if (data['success'] == true) {
-        await LocalStorageService.saveUserSession(
-          userId: userId,
-          fullName: _nameController.text.trim(),
-          phone: phone,
-          photoUrl: photoUrl ?? '',
+      // Call the real create-account edge function
+      try {
+        final res = await SupabaseService().client.functions.invoke(
+          'create-account',
+          body: {
+            'user_id': userId,
+            'full_name': _nameController.text.trim(),
+            'phone': phone,
+            'email': _emailController.text.trim(),
+            'city': _cityController.text.trim(),
+            'photo_url': photoUrl ?? '',
+          },
         );
-        await LocalStorageService.setOnboardingComplete();
 
-        if (!mounted) return;
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (_) => const ServiceSelectionPage()),
-          (r) => false,
-        );
-      } else {
-        if (!mounted) return;
-        UIUtils.showError(context, (data['error'] as String?) ?? 'Profile creation failed');
-        setState(() => _isLoading = false);
+        final data = res.data as Map<String, dynamic>? ?? {};
+
+        if (data['success'] != true) {
+          debugPrint('create-account returned: $data');
+        }
+      } catch (edgeFnError) {
+        debugPrint('Edge function error: $edgeFnError');
       }
+
+      // Save session locally
+      await LocalStorageService.saveUserSession(
+        userId: userId,
+        fullName: _nameController.text.trim(),
+        phone: phone,
+        photoUrl: photoUrl ?? '',
+      );
+      await LocalStorageService.setOnboardingComplete();
+
+      if (!mounted) return;
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const ServiceSelectionPage()),
+        (r) => false,
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
-      UIUtils.showError(context, e.toString());
+      UIUtils.showError(context, 'Error creating account: $e');
     }
   }
 
@@ -321,69 +306,7 @@ class _AccountDetailsScreenState extends State<AccountDetailsScreen>
                             icon: Icons.location_city_rounded,
                             validator: (v) => v!.length < 2 ? 'Required' : null,
                           ),
-                          const SizedBox(height: 48),
-
-                          Container(
-                            padding: const EdgeInsets.all(20),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF8F7F5),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Row(
-                                  children: [
-                                    Icon(
-                                      Icons.lock_rounded,
-                                      color: UIUtils.primary,
-                                      size: 20,
-                                    ),
-                                    SizedBox(width: 8),
-                                    Text(
-                                      'Set Security MPIN',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                        color: UIUtils.textMain,
-                                        fontFamily: "Plus Jakarta Sans",
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 16),
-                                const Text(
-                                  'Enter 4-Digit MPIN',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: UIUtils.textSecondary,
-                                    fontFamily: "Plus Jakarta Sans",
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                                MpinInputWidget(
-                                  obscureText: true,
-                                  onChanged: (val) => _mpin = val,
-                                  onComplete: (val) => _mpin = val,
-                                ),
-                                const SizedBox(height: 24),
-                                const Text(
-                                  'Confirm 4-Digit MPIN',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: UIUtils.textSecondary,
-                                    fontFamily: "Plus Jakarta Sans",
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                                MpinInputWidget(
-                                  obscureText: true,
-                                  onChanged: (val) => _confirmMpin = val,
-                                  onComplete: (val) => _confirmMpin = val,
-                                ),
-                              ],
-                            ),
-                          ),
+                          const SizedBox(height: 24),
                           const SizedBox(height: 48),
 
                           SizedBox(

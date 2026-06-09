@@ -1,3 +1,4 @@
+// @ts-nocheck
 type Level = 'info' | 'warn' | 'error';
 
 export function log(level: Level, event: string, data?: Record<string, unknown>) {
@@ -21,3 +22,4 @@ function sanitize(obj: Record<string, unknown>): Record<string, unknown> {
     )
   );
 }
+

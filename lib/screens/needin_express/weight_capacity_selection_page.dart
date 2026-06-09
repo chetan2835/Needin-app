@@ -61,7 +61,7 @@ class _WeightCapacitySelectionPageState extends State<WeightCapacitySelectionPag
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
                             letterSpacing: 0.5,
-                            color: Color(0xFFFF8000), // primary
+                            color: Color(0xFFF05A4F), // primary
                           ),
                         ),
                         Text(
@@ -88,7 +88,7 @@ class _WeightCapacitySelectionPageState extends State<WeightCapacitySelectionPag
                             flex: 55,
                             child: Container(
                               decoration: BoxDecoration(
-                                color: const Color(0xFFFF8000), // primary
+                                color: Colors.green, // green - active progress
                                 borderRadius: BorderRadius.circular(9999),
                               ),
                             ),
@@ -131,15 +131,11 @@ class _WeightCapacitySelectionPageState extends State<WeightCapacitySelectionPag
                       const SizedBox(height: 32),
 
                       /// Selection List
-                      _buildOption("1kg", "Up to 1 kg", "Documents, letters, keys", Icons.description),
+                      _buildOption("2kg", "Up to 2 kg", "Documents, letters, small items", Icons.description),
                       const SizedBox(height: 12),
                       _buildOption("5kg", "Up to 5 kg", "Small parcels, shoes, electronics", Icons.redeem),
                       const SizedBox(height: 12),
-                      _buildOption("10kg", "Up to 10 kg", "Medium box, laptop bag", Icons.widgets),
-                      const SizedBox(height: 12),
                       _buildOption("25kg", "Up to 25 kg", "Large suitcase, equipment", Icons.luggage),
-                      const SizedBox(height: 12),
-                      _buildOption("above25kg", "Above 25 kg", "Cargo, freight, heavy items", Icons.pallet),
                     ],
                   ),
                 ),
@@ -162,11 +158,11 @@ class _WeightCapacitySelectionPageState extends State<WeightCapacitySelectionPag
                 top: false,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFFF8000), // primary
+                    backgroundColor: const Color(0xFFF05A4F), // primary
                     foregroundColor: Colors.white,
                     minimumSize: const Size(double.infinity, 48),
                     elevation: 4,
-                    shadowColor: const Color(0xFFFF8000).withValues(alpha: 0.3),
+                    shadowColor: const Color(0xFFF05A4F).withValues(alpha: 0.3),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8), // rounded-lg
                     ),
@@ -202,10 +198,10 @@ class _WeightCapacitySelectionPageState extends State<WeightCapacitySelectionPag
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFFFF8000).withValues(alpha: 0.05) : Colors.transparent,
+          color: isSelected ? const Color(0xFFF05A4F).withValues(alpha: 0.05) : Colors.transparent,
           borderRadius: BorderRadius.circular(12), // rounded-xl
           border: Border.all(
-            color: isSelected ? const Color(0xFFFF8000) : const Color(0xFFE7E0DA), // primary or border-color
+            color: isSelected ? const Color(0xFFF05A4F) : const Color(0xFFE7E0DA), // primary or border-color
             width: isSelected ? 2 : 1,
           ),
         ),
@@ -217,13 +213,13 @@ class _WeightCapacitySelectionPageState extends State<WeightCapacitySelectionPag
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: isSelected ? const Color(0xFFFF8000) : const Color(0xFFFF8000).withValues(alpha: 0.1),
+                color: isSelected ? const Color(0xFFF05A4F) : const Color(0xFFF05A4F).withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: Center(
                 child: Icon(
                   icon,
-                  color: isSelected ? Colors.white : const Color(0xFFFF8000),
+                  color: isSelected ? Colors.white : const Color(0xFFF05A4F),
                   size: 20,
                 ),
               ),
@@ -264,10 +260,10 @@ class _WeightCapacitySelectionPageState extends State<WeightCapacitySelectionPag
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: isSelected ? const Color(0xFFFF8000) : const Color(0xFFE7E0DA),
+                  color: isSelected ? const Color(0xFFF05A4F) : const Color(0xFFE7E0DA),
                   width: 2,
                 ),
-                color: isSelected ? const Color(0xFFFF8000) : Colors.transparent,
+                color: isSelected ? const Color(0xFFF05A4F) : Colors.transparent,
               ),
               child: isSelected
                   ? Center(

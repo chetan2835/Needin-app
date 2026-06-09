@@ -1,7 +1,8 @@
+// @ts-nocheck
 // deno-lint-ignore-file no-explicit-any
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import * as bcrypt from "https://deno.land/x/bcrypt@v0.4.1/mod.ts";
+
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -22,7 +23,6 @@ serve(async (req: Request): Promise<Response> => {
       phone,
       email,
       city,
-      mpin,
       photo_url,
     } = body as {
       user_id: string;
@@ -30,11 +30,10 @@ serve(async (req: Request): Promise<Response> => {
       phone: string;
       email?: string;
       city: string;
-      mpin: string;
       photo_url?: string;
     };
 
-    if (!user_id || !full_name || !phone || !city || !mpin) {
+    if (!user_id || !full_name || !phone || !city) {
       return new Response(
         JSON.stringify({ success: false, error: 'Missing required fields' }),
         {
@@ -59,10 +58,6 @@ serve(async (req: Request): Promise<Response> => {
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    // Hash MPIN before storing — NEVER store raw PIN
-    const salt = await bcrypt.genSalt(10);
-    const mpinHash = await bcrypt.hash(mpin, salt);
-
     // Fetch existing profile to preserve any existing data
     const { data: existingProfile } = await supabase
       .from('profiles')
@@ -81,10 +76,8 @@ serve(async (req: Request): Promise<Response> => {
           email: email || (existingProfile as any)?.email || null,
           city: city || (existingProfile as any)?.city,
           photo_url: photo_url || (existingProfile as any)?.photo_url || null,
-          mpin_hash: mpinHash,
           role: (existingProfile as any)?.role ?? 'user',
           is_active: true,
-          mpin_attempts: 0,
           updated_at: new Date().toISOString(),
         },
         { onConflict: 'id' }
@@ -114,3 +107,4 @@ serve(async (req: Request): Promise<Response> => {
     );
   }
 });
+

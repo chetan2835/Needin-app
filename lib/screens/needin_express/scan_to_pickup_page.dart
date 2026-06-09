@@ -46,11 +46,11 @@ class _ScanToPickupPageState extends State<ScanToPickupPage> {
                 width: 80,
                 height: 80,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFF8000).withValues(alpha: 0.1),
+                  color: const Color(0xFFF05A4F).withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
                 child: const Center(
-                  child: Icon(Icons.inventory, size: 40, color: Color(0xFFFF8000)),
+                  child: Icon(Icons.inventory, size: 40, color: Color(0xFFF05A4F)),
                 ),
               ),
               const SizedBox(height: 24),
@@ -102,7 +102,7 @@ class _ScanToPickupPageState extends State<ScanToPickupPage> {
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: Color(0xFFFF8000), width: 2),
+                          borderSide: const BorderSide(color: Color(0xFFF05A4F), width: 2),
                         ),
                         filled: true,
                         fillColor: Colors.white,
@@ -122,7 +122,7 @@ class _ScanToPickupPageState extends State<ScanToPickupPage> {
               const Spacer(),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFF8000),
+                  backgroundColor: const Color(0xFFF05A4F),
                   foregroundColor: Colors.white,
                   minimumSize: const Size(double.infinity, 56),
                   shape: RoundedRectangleBorder(

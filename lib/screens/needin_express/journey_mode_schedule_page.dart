@@ -1,5 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'space_weight_page.dart';
+import '../../core/widgets/date_time_picker_modal.dart';
+import '../../core/utils/travel_mode_mapper.dart';
+import 'package:provider/provider.dart';
+import '../../core/providers/journey_draft_provider.dart';
+
 
 class JourneyModeSchedulePage extends StatefulWidget {
   final Map<String, dynamic> journeyData;
@@ -7,100 +13,166 @@ class JourneyModeSchedulePage extends StatefulWidget {
   const JourneyModeSchedulePage({super.key, required this.journeyData});
 
   @override
-  State<JourneyModeSchedulePage> createState() => _JourneyModeSchedulePageState();
+  State<JourneyModeSchedulePage> createState() =>
+      _JourneyModeSchedulePageState();
 }
 
 class _JourneyModeSchedulePageState extends State<JourneyModeSchedulePage> {
   String _selectedMode = 'Car';
   DateTime? _departureTime;
   DateTime? _arrivalTime;
-  final bool _isLoading = false;
 
-  final List<Map<String, dynamic>> _travelModes = [
-    {'title': 'Car', 'icon': Icons.directions_car},
-    {'title': 'Bike / Truck / Auto', 'icon': Icons.local_shipping},
-    {'title': 'Bus', 'icon': Icons.directions_bus},
-    {'title': 'Train', 'icon': Icons.train},
-    {'title': 'Flight', 'icon': Icons.flight},
-  ];
+  // Travel mode list uses centralized mapper — icons and labels are consistent
+  final List<Map<String, dynamic>> _travelModes = TravelModeMapper.getAllModes().map((m) => {
+    'title': m['label'] as String,
+    'dbValue': m['dbValue'] as String,
+    'icon': m['icon'] as IconData,
+  }).toList();
 
-  Future<void> _pickDateTime(bool isDeparture) async {
-    final date = await showDatePicker(
-      context: context,
-      initialDate: DateTime.now(),
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
-      builder: (context, child) {
-        return Theme(
-          data: ThemeData.light().copyWith(
-            colorScheme: const ColorScheme.light(primary: Color(0xFFF27F0D)),
-          ),
-          child: child!,
-        );
-      },
-    );
-    if (date != null) {
-      if (!mounted) return;
-      final time = await showTimePicker(
-        context: context,
-        initialTime: TimeOfDay.now(),
-        builder: (context, child) {
-          return Theme(
-            data: ThemeData.light().copyWith(
-              colorScheme: const ColorScheme.light(primary: Color(0xFFF27F0D)),
-            ),
-            child: child!,
-          );
-        },
-      );
-      if (time != null) {
-        setState(() {
-          if (isDeparture) {
-            _departureTime = DateTime(date.year, date.month, date.day, time.hour, time.minute);
-          } else {
-            _arrivalTime = DateTime(date.year, date.month, date.day, time.hour, time.minute);
-          }
-        });
-      }
+  static const Map<String, String> _modeApiMap = {
+    'Car': 'road',
+    'Bike / Truck / Auto': 'bike',
+    'Bus': 'bus',
+    'Train': 'train',
+    'Flight': 'flight',
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    // Pre-fill from existing journeyData if editing
+    final depStr = widget.journeyData['departure_datetime']?.toString() ?? widget.journeyData['departure_time']?.toString();
+    final arrStr = widget.journeyData['estimated_arrival_datetime']?.toString() ?? widget.journeyData['arrival_time']?.toString();
+    if (depStr != null && depStr.isNotEmpty) {
+      try { _departureTime = DateTime.parse(depStr); } catch (_) {}
     }
+    if (arrStr != null && arrStr.isNotEmpty) {
+      try { _arrivalTime = DateTime.parse(arrStr); } catch (_) {}
+    }
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
+  }
+
+  Future<void> _pickDateTime() async {
+    DateTime? initialDate = _departureTime;
+    TimeOfDay? initialTime = _departureTime != null ? TimeOfDay.fromDateTime(_departureTime!) : null;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => DateTimePickerModal(
+        initialDate: initialDate,
+        initialTime: initialTime,
+        onSelect: (date, time, timestamp) {
+          if (!mounted) return;
+          setState(() {
+            _departureTime = DateTime(
+              date.year,
+              date.month,
+              date.day,
+              time.hour,
+              time.minute,
+            );
+          });
+        },
+      ),
+    );
+  }
+
+  Future<void> _pickArrivalDateTime() async {
+    DateTime? initialDate = _arrivalTime ?? _departureTime;
+    TimeOfDay? initialTime = _arrivalTime != null ? TimeOfDay.fromDateTime(_arrivalTime!) : null;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => DateTimePickerModal(
+        initialDate: initialDate,
+        initialTime: initialTime,
+        onSelect: (date, time, timestamp) {
+          if (!mounted) return;
+          setState(() {
+            _arrivalTime = DateTime(
+              date.year,
+              date.month,
+              date.day,
+              time.hour,
+              time.minute,
+            );
+          });
+        },
+      ),
+    );
   }
 
   String _formatDateTime(DateTime? dt) {
     if (dt == null) return "Not selected";
-    return "${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}";
+    return DateFormat("MMMM d, yyyy • h:mm a").format(dt);
   }
 
   Future<void> _submitJourney() async {
-    if (_departureTime == null || _arrivalTime == null) {
+    if (_departureTime == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select both departure and arrival times')),
+        const SnackBar(
+          content: Text('Please select an Estimated Time of Departure'),
+        ),
       );
       return;
     }
 
-    if (_arrivalTime!.isBefore(_departureTime!)) {
+    if (_arrivalTime == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Arrival time cannot be before departure time')),
+        const SnackBar(
+          content: Text('Please select your estimated arrival time.'),
+        ),
       );
       return;
     }
 
-    final finalJourneyData = Map<String, dynamic>.from(widget.journeyData);
-    // Map display labels to schema-standard travel_mode values
-    final modeMap = {
-      'Car': 'road',
-      'Bike / Truck / Auto': 'bike',
-      'Bus': 'bus',
-      'Train': 'train',
-      'Flight': 'flight',
-    };
-    finalJourneyData['travel_mode'] = modeMap[_selectedMode] ?? 'road';
-    finalJourneyData['departure_time'] = _departureTime!.toIso8601String();
-    finalJourneyData['arrival_time'] = _arrivalTime!.toIso8601String();
+    final now = DateTime.now();
+    final nowWithoutSeconds = DateTime(now.year, now.month, now.day, now.hour, now.minute);
+    if (_departureTime!.isBefore(nowWithoutSeconds)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a valid future time.'),
+          backgroundColor: Color(0xFFF05A4F),
+        ),
+      );
+      return;
+    }
 
-    Navigator.push(context,
+    if (_arrivalTime!.isBefore(_departureTime!) || _arrivalTime!.isAtSameMomentAs(_departureTime!)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Arrival time must be after departure time.'),
+        ),
+      );
+      return;
+    }
+
+    final provider = Provider.of<JourneyDraftProvider>(context, listen: false);
+
+    // Store exact local timestamps (without timezone conversion/Z)
+    final depStr = DateFormat("yyyy-MM-dd'T'HH:mm:ss").format(_departureTime!);
+    final arrStr = DateFormat("yyyy-MM-dd'T'HH:mm:ss").format(_arrivalTime!);
+    
+    provider.updateData({
+      'travel_mode': _modeApiMap[_selectedMode] ?? 'road',
+      'departure_datetime': depStr,
+      'estimated_arrival_datetime': arrStr,
+      'departure_time': depStr,
+      'arrival_time': arrStr,
+    });
+
+    Navigator.push(
+      context,
       MaterialPageRoute(
-        builder: (_) => SpaceWeightPage(journeyData: finalJourneyData),
+        builder: (_) => SpaceWeightPage(journeyData: provider.draftData),
       ),
     );
   }
@@ -128,7 +200,10 @@ class _JourneyModeSchedulePageState extends State<JourneyModeSchedulePage> {
                         shape: BoxShape.circle,
                         color: Colors.transparent,
                       ),
-                      child: const Icon(Icons.arrow_back, color: Color(0xFF0F172A)),
+                      child: const Icon(
+                        Icons.arrow_back,
+                        color: Color(0xFF0F172A),
+                      ),
                     ),
                   ),
                   const Expanded(
@@ -160,23 +235,23 @@ class _JourneyModeSchedulePageState extends State<JourneyModeSchedulePage> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: const [
                       Text(
-                        "Step 2 & 3 of 11",
+                        "Step 2 of 7",
                         style: TextStyle(
                           fontFamily: "Plus Jakarta Sans",
                           fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFFF27F0D),
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF22C55E),
                         ),
                       ),
                       Text(
-                        "27% Completed",
+                        "29% Completed",
                         style: TextStyle(
                           fontFamily: "Plus Jakarta Sans",
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
                           color: Color(0xFF64748B),
                         ),
-                      )
+                      ),
                     ],
                   ),
                   const SizedBox(height: 8),
@@ -189,10 +264,10 @@ class _JourneyModeSchedulePageState extends State<JourneyModeSchedulePage> {
                     ),
                     child: FractionallySizedBox(
                       alignment: Alignment.centerLeft,
-                      widthFactor: 0.27,
+                      widthFactor: 0.29,
                       child: Container(
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF27F0D),
+                          color: const Color(0xFF22C55E),
                           borderRadius: BorderRadius.circular(3),
                         ),
                       ),
@@ -223,13 +298,19 @@ class _JourneyModeSchedulePageState extends State<JourneyModeSchedulePage> {
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF27F0D).withValues(alpha: 0.1),
+                        color: const Color(0xFFF05A4F).withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFF27F0D).withValues(alpha: 0.2)),
+                        border: Border.all(
+                          color: const Color(0xFFF05A4F).withValues(alpha: 0.2),
+                        ),
                       ),
                       child: Row(
                         children: const [
-                          Icon(Icons.info_outline, color: Color(0xFFF27F0D), size: 20),
+                          Icon(
+                            Icons.info_outline,
+                            color: Color(0xFFF05A4F),
+                            size: 20,
+                          ),
                           SizedBox(width: 12),
                           Expanded(
                             child: Text(
@@ -238,7 +319,7 @@ class _JourneyModeSchedulePageState extends State<JourneyModeSchedulePage> {
                                 fontFamily: "Plus Jakarta Sans",
                                 fontSize: 13,
                                 fontWeight: FontWeight.w500,
-                                color: Color(0xFFF27F0D),
+                                color: Color(0xFFF05A4F),
                               ),
                             ),
                           ),
@@ -248,79 +329,9 @@ class _JourneyModeSchedulePageState extends State<JourneyModeSchedulePage> {
                     const SizedBox(height: 24),
 
                     // Travel Mode List
-                    ..._travelModes.map((mode) {
-                      final isSelected = _selectedMode == mode['title'];
-                      return GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _selectedMode = mode['title'];
-                          });
-                        },
-                        child: Container(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: isSelected ? const Color(0xFFF27F0D).withValues(alpha: 0.05) : Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: isSelected ? const Color(0xFFF27F0D) : const Color(0xFFE2E8F0),
-                              width: 2,
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 48,
-                                height: 48,
-                                decoration: BoxDecoration(
-                                  color: isSelected ? const Color(0xFFF27F0D) : const Color(0xFFF8FAFC),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Icon(
-                                  mode['icon'],
-                                  color: isSelected ? Colors.white : const Color(0xFFF27F0D),
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: Text(
-                                  mode['title'],
-                                  style: TextStyle(
-                                    fontFamily: "Plus Jakarta Sans",
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: isSelected ? const Color(0xFFF27F0D) : const Color(0xFF0F172A),
-                                  ),
-                                ),
-                              ),
-                              if (isSelected)
-                                Container(
-                                  width: 24,
-                                  height: 24,
-                                  decoration: const BoxDecoration(
-                                    color: Color(0xFFF27F0D),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Icon(Icons.check, color: Colors.white, size: 16),
-                                )
-                              else
-                                Container(
-                                  width: 24,
-                                  height: 24,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    border: Border.all(color: const Color(0xFFE2E8F0), width: 2),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      );
-                    }),
+                    _buildTravelModeDropdown(),
 
-                    const SizedBox(height: 32),
-                    const Divider(color: Color(0xFFF1F5F9)),
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 8),
 
                     /// Journey Schedule
                     const Text(
@@ -338,16 +349,16 @@ class _JourneyModeSchedulePageState extends State<JourneyModeSchedulePage> {
                     _buildDateTimePicker(
                       label: "Estimated Time of Departure",
                       value: _departureTime,
-                      onTap: () => _pickDateTime(true),
+                      onTap: () => _pickDateTime(),
                       icon: Icons.calendar_today,
                     ),
                     const SizedBox(height: 20),
 
                     // Arrival Time
                     _buildDateTimePicker(
-                      label: "Estimated Time of Reach",
+                      label: "Estimated Time of Arrival",
                       value: _arrivalTime,
-                      onTap: () => _pickDateTime(false),
+                      onTap: () => _pickArrivalDateTime(),
                       icon: Icons.event_available,
                     ),
                     const SizedBox(height: 24),
@@ -356,44 +367,37 @@ class _JourneyModeSchedulePageState extends State<JourneyModeSchedulePage> {
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF27F0D).withValues(alpha: 0.1),
+                        color: const Color(0xFFF05A4F).withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFF27F0D).withValues(alpha: 0.2)),
+                        border: Border.all(
+                          color: const Color(0xFFF05A4F).withValues(alpha: 0.2),
+                        ),
                       ),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Icon(Icons.info, color: Color(0xFFF27F0D), size: 20),
-                          const SizedBox(width: 12),
+                        children: const [
+                          Icon(
+                            Icons.info,
+                            color: Color(0xFFF05A4F),
+                            size: 20,
+                          ),
+                          SizedBox(width: 12),
                           Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: const [
-                                Text(
-                                  "Note on timings",
-                                  style: TextStyle(
-                                    fontFamily: "Plus Jakarta Sans",
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF0F172A),
-                                  ),
-                                ),
-                                SizedBox(height: 4),
-                                Text(
-                                  "Timings are approximate. There is no urgency or penalty for slight delays.",
-                                  style: TextStyle(
-                                    fontFamily: "Plus Jakarta Sans",
-                                    fontSize: 14,
-                                    color: Color(0xFF475569),
-                                  ),
-                                ),
-                              ],
+                            child: Text(
+                              "Please enter your expected departure and arrival times manually. These times will be visible to senders looking for travelers on your route.",
+                              style: TextStyle(
+                                fontFamily: "Plus Jakarta Sans",
+                                fontSize: 14,
+                                color: Color(0xFF475569),
+                              ),
                             ),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 100), // Padding buffer for bottom action bar
+                    const SizedBox(
+                      height: 100,
+                    ), // Padding buffer for bottom action bar
                   ],
                 ),
               ),
@@ -411,7 +415,7 @@ class _JourneyModeSchedulePageState extends State<JourneyModeSchedulePage> {
               color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 10,
               offset: const Offset(0, -4),
-            )
+            ),
           ],
         ),
         child: SizedBox(
@@ -419,32 +423,30 @@ class _JourneyModeSchedulePageState extends State<JourneyModeSchedulePage> {
           width: double.infinity,
           child: ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFF27F0D),
+              backgroundColor: const Color(0xFFF05A4F),
               foregroundColor: Colors.white,
               elevation: 4,
-              shadowColor: const Color(0xFFFBD38D),
+              shadowColor: const Color(0xFFF37A72),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(32),
               ),
             ),
-            onPressed: _isLoading ? null : _submitJourney,
-            child: _isLoading
-              ? const CircularProgressIndicator(color: Colors.white)
-              : Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: const [
-                    Text(
-                      "Continue",
-                      style: TextStyle(
-                        fontFamily: "Plus Jakarta Sans",
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
+            onPressed: _submitJourney,
+            child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: const [
+                      Text(
+                        "Continue",
+                        style: TextStyle(
+                          fontFamily: "Plus Jakarta Sans",
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                    ),
-                    SizedBox(width: 8),
-                    Icon(Icons.arrow_forward),
-                  ],
-                ),
+                      SizedBox(width: 8),
+                      Icon(Icons.arrow_forward),
+                    ],
+                  ),
           ),
         ),
       ),
@@ -490,7 +492,9 @@ class _JourneyModeSchedulePageState extends State<JourneyModeSchedulePage> {
                   style: TextStyle(
                     fontFamily: "Plus Jakarta Sans",
                     fontSize: 16,
-                    color: value == null ? const Color(0xFF94A3B8) : const Color(0xFF0F172A),
+                    color: value == null
+                        ? const Color(0xFF94A3B8)
+                        : const Color(0xFF0F172A),
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -500,6 +504,114 @@ class _JourneyModeSchedulePageState extends State<JourneyModeSchedulePage> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildTravelModeDropdown() {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: _selectedMode,
+          isExpanded: true,
+          icon: const Padding(
+            padding: EdgeInsets.only(right: 16.0),
+            child: Icon(Icons.keyboard_arrow_down, color: Color(0xFF64748B)),
+          ),
+          dropdownColor: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          items: _travelModes.map((mode) {
+            final isSelected = _selectedMode == mode['title'];
+            return DropdownMenuItem<String>(
+              value: mode['title'],
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: isSelected ? const Color(0xFFF05A4F) : const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(
+                        mode['icon'],
+                        color: isSelected ? Colors.white : const Color(0xFFF05A4F),
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Text(
+                      mode['title'],
+                      style: TextStyle(
+                        fontFamily: "Plus Jakarta Sans",
+                        fontSize: 16,
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                        color: isSelected ? const Color(0xFFF05A4F) : const Color(0xFF0F172A),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+          onChanged: (String? newValue) {
+            if (newValue != null && newValue != _selectedMode) {
+              setState(() {
+                _selectedMode = newValue;
+              });
+            }
+          },
+          selectedItemBuilder: (BuildContext context) {
+            return _travelModes.map<Widget>((mode) {
+              return Container(
+                alignment: Alignment.centerLeft,
+                padding: const EdgeInsets.only(left: 16.0),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF05A4F).withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(
+                        mode['icon'],
+                        color: const Color(0xFFF05A4F),
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Text(
+                      mode['title'],
+                      style: const TextStyle(
+                        fontFamily: "Plus Jakarta Sans",
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }).toList();
+          },
+        ),
+      ),
     );
   }
 }

@@ -1,10 +1,12 @@
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/providers/user_profile_provider.dart';
 import '../../core/services/language_service.dart';
+import '../../core/services/local_storage_service.dart';
+import '../login/email_otp_page.dart';
 
 class PersonalInfoPage extends StatefulWidget {
   const PersonalInfoPage({super.key});
@@ -16,23 +18,29 @@ class PersonalInfoPage extends StatefulWidget {
 class _PersonalInfoPageState extends State<PersonalInfoPage> {
   late TextEditingController _nameController;
   late TextEditingController _emailController;
-  late TextEditingController _phoneController;
-  late TextEditingController _dobController;
+  late TextEditingController _cityController;
+  late TextEditingController _ageController;
 
   bool _isLoading = true;
   bool _isSaving = false;
+
   String? _existingAvatarUrl;
   Uint8List? _selectedImageBytes;
   String? _selectedImageExt;
   final ImagePicker _picker = ImagePicker();
+
+  String? _nameError;
+  String? _emailError;
+  String? _cityError;
+  String? _ageError;
 
   @override
   void initState() {
     super.initState();
     _nameController = TextEditingController();
     _emailController = TextEditingController();
-    _phoneController = TextEditingController();
-    _dobController = TextEditingController();
+    _cityController = TextEditingController();
+    _ageController = TextEditingController();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadProfile();
     });
@@ -42,30 +50,24 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
   void dispose() {
     _nameController.dispose();
     _emailController.dispose();
-    _phoneController.dispose();
-    _dobController.dispose();
+    _cityController.dispose();
+    _ageController.dispose();
     super.dispose();
   }
 
   Future<void> _loadProfile() async {
     final userProfileProv = Provider.of<UserProfileProvider>(context, listen: false);
-    // If not loaded, load it. Usually we just load unconditionally to ensure freshness
     await userProfileProv.loadProfile();
     final profile = userProfileProv.profileData;
-    final user = AuthService().currentUser;
 
     if (profile != null && mounted) {
       setState(() {
         _nameController.text = profile['full_name']?.toString() ?? '';
         _emailController.text = profile['email']?.toString() ?? '';
-        _phoneController.text = profile['phone']?.toString() ??
-            user?.phoneNumber ?? '';
-        _dobController.text = profile['date_of_birth']?.toString() ?? '';
+        _cityController.text = profile['city']?.toString() ?? '';
+        _ageController.text = profile['age']?.toString() ?? '';
         _existingAvatarUrl = profile['profile_image_url']?.toString();
       });
-    } else if (mounted) {
-      // Fall back to Firebase phone
-      _phoneController.text = user?.phoneNumber ?? '';
     }
 
     if (mounted) setState(() => _isLoading = false);
@@ -90,52 +92,105 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
     }
   }
 
-  Future<void> _saveChanges() async {
-    final name = _nameController.text.trim();
+  Future<void> _verifyEmailFlow() async {
     final email = _emailController.text.trim();
-    final phone = _phoneController.text.trim();
-    final dob = _dobController.text.trim();
-
-    if (name.isEmpty) {
-      _showSnack('Full name is required', isError: true);
+    if (email.isEmpty) {
+      _showSnack('Enter an email address first', isError: true);
+      return;
+    }
+    
+    final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+$');
+    if (!emailRegex.hasMatch(email)) {
+      _showSnack('Please enter a valid email format', isError: true);
       return;
     }
 
-    if (email.isNotEmpty) {
-      final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+$');
-      if (!emailRegex.hasMatch(email)) {
-        _showSnack('Please enter a valid email', isError: true);
-        return;
-      }
+    // CRITICAL FIX: Save the email to the DB first!
+    // The OTP verification relies on a Supabase RLS policy that matches the row
+    // using (email = auth.email()). If the row doesn't have the email yet,
+    // the OTP update will fail silently with 0 rows affected.
+    final userProfileProv = Provider.of<UserProfileProvider>(context, listen: false);
+    await userProfileProv.updateProfile(email: email);
+
+    if (!mounted) return;
+    final success = await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => EmailOtpPage(email: email)),
+    );
+
+    if (success == true && mounted) {
+      // Optimistic in-memory update (immediate badge rendering)
+      userProfileProv.markEmailVerified(email);
+      // Re-fetch from backend to confirm persistence (source of truth sync)
+      userProfileProv.loadProfile();
+    }
+  }
+
+  Future<void> _saveChanges() async {
+    final name = _nameController.text.trim();
+    final email = _emailController.text.trim();
+    final city = _cityController.text.trim();
+    final ageStr = _ageController.text.trim();
+
+    setState(() {
+      _nameError = null;
+      _emailError = null;
+      _cityError = null;
+      _ageError = null;
+    });
+
+    bool hasError = false;
+
+    if (name.isEmpty) {
+      _nameError = 'Full name is required';
+      hasError = true;
+    }
+    if (city.isEmpty) {
+      _cityError = 'City is required';
+      hasError = true;
+    }
+    if (ageStr.isEmpty) {
+      _ageError = 'Age is required';
+      hasError = true;
+    }
+
+    if (hasError) {
+      setState(() {});
+      return;
     }
 
     setState(() => _isSaving = true);
-
+    
     final userProviders = Provider.of<UserProfileProvider>(context, listen: false);
+    
+    // Only save email if it's NOT verified yet.
+    // Verified emails are locked and cannot be overridden by profile saves.
+    final emailToSave = userProviders.isEmailVerified ? null : email;
+
+    // CRITICAL FIX: Always write Firebase phone number to profiles.phone.
+    // Without this, profiles.phone is null and the Call feature cannot
+    // prefill the traveler's number in the dialer.
+    final firebasePhone = AuthService().currentUser?.phoneNumber;
 
     final success = await userProviders.updateProfile(
       fullName: name,
-      email: email.isNotEmpty ? email : null,
-      phone: phone,
-      dateOfBirth: dob.isNotEmpty ? dob : null,
+      email: emailToSave,
+      city: city,
+      age: int.tryParse(ageStr),
+      phone: firebasePhone, // always persist Firebase phone to DB
       imageBytes: _selectedImageBytes,
       imageExt: _selectedImageExt,
     );
 
-    if (mounted) {
-      setState(() => _isSaving = false);
+    if (!mounted) return;
+    setState(() => _isSaving = false);
 
-      if (success) {
-        Navigator.pop(context, true); // Signal parent to refresh
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Profile updated successfully!'),
-            backgroundColor: Color(0xFF16A34A),
-          ),
-        );
-      } else {
-        _showSnack('Failed to save. Please try again. ${userProviders.error}', isError: true);
-      }
+    if (success) {
+      await LocalStorageService.setProfileCompleted();
+      if (!mounted) return;
+      _showSnack('Profile updated successfully!');
+      Navigator.pop(context);
+    } else {
+      _showSnack('Failed to save. Please try again. ${userProviders.error}', isError: true);
     }
   }
 
@@ -144,7 +199,7 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(msg),
-        backgroundColor: isError ? const Color(0xFFDC2626) : null,
+        backgroundColor: isError ? const Color(0xFFDC2626) : const Color(0xFF16A34A),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
@@ -180,7 +235,7 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
         ),
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFFF27F0D)))
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFFF05A4F)))
           : SafeArea(
               bottom: false,
               child: Column(
@@ -231,7 +286,7 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
                                         child: Container(
                                           padding: const EdgeInsets.all(8),
                                           decoration: BoxDecoration(
-                                            color: const Color(0xFFF27F0D),
+                                            color: const Color(0xFFF05A4F),
                                             shape: BoxShape.circle,
                                             border: Border.all(color: Colors.white, width: 2),
                                           ),
@@ -250,7 +305,7 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
                                       fontFamily: 'Plus Jakarta Sans',
                                       fontSize: 14,
                                       fontWeight: FontWeight.w600,
-                                      color: Color(0xFFF27F0D),
+                                      color: Color(0xFFF05A4F),
                                     ),
                                   ),
                                 ),
@@ -267,95 +322,99 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
                                   label: lang.t('full_name'),
                                   controller: _nameController,
                                   icon: Icons.person,
+                                  errorText: _nameError,
+                                  onChanged: (_) {
+                                    if (_nameError != null) setState(() => _nameError = null);
+                                  },
+                                ),
+                                const SizedBox(height: 24),
+                                // Email field: locked when verified
+                                Builder(builder: (context) {
+                                  final isVerified = context.watch<UserProfileProvider>().isEmailVerified;
+                                  return _buildTextField(
+                                    label: "Email Address",
+                                    controller: _emailController,
+                                    icon: Icons.mail,
+                                    keyboardType: TextInputType.emailAddress,
+                                    errorText: _emailError,
+                                    readOnly: isVerified,
+                                    onChanged: (_) {
+                                      if (_emailError != null) setState(() => _emailError = null);
+                                    },
+                                    trailing: isVerified
+                                        ? const Padding(
+                                            padding: EdgeInsets.only(right: 12.0),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Text(
+                                                  "Verified",
+                                                  style: TextStyle(
+                                                    color: Color(0xFF16A34A),
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 12,
+                                                    fontFamily: 'Plus Jakarta Sans',
+                                                  ),
+                                                ),
+                                                SizedBox(width: 4),
+                                                Icon(Icons.check_circle, color: Color(0xFF16A34A), size: 16),
+                                              ],
+                                            ),
+                                          )
+                                        : TextButton(
+                                            onPressed: _verifyEmailFlow,
+                                            child: const Text(
+                                              "Verify Email",
+                                              style: TextStyle(
+                                                color: Color(0xFFF05A4F),
+                                                fontWeight: FontWeight.bold,
+                                                fontFamily: 'Plus Jakarta Sans',
+                                                fontSize: 13,
+                                              ),
+                                            ),
+                                          ),
+                                  );
+                                }),
+                                const SizedBox(height: 24),
+                                _buildTextField(
+                                  label: "City",
+                                  controller: _cityController,
+                                  icon: Icons.location_on,
+                                  errorText: _cityError,
+                                  onChanged: (_) {
+                                    if (_cityError != null) setState(() => _cityError = null);
+                                  },
                                 ),
                                 const SizedBox(height: 24),
                                 _buildTextField(
-                                  label: lang.t('email_address'),
-                                  controller: _emailController,
-                                  icon: Icons.mail,
-                                  keyboardType: TextInputType.emailAddress,
+                                  label: "Age",
+                                  controller: _ageController,
+                                  icon: Icons.cake,
+                                  keyboardType: TextInputType.number,
+                                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                  errorText: _ageError,
+                                  onChanged: (_) {
+                                    if (_ageError != null) setState(() => _ageError = null);
+                                  },
                                 ),
                                 const SizedBox(height: 24),
                                 _buildTextField(
                                   label: lang.t('phone_number'),
-                                  controller: _phoneController,
-                                  icon: Icons.call,
+                                  controller: TextEditingController(text: AuthService().currentUser?.phoneNumber ?? ''),
+                                  icon: Icons.phone,
                                   keyboardType: TextInputType.phone,
-                                  readOnly: true, // Phone number is from Firebase, not editable
-                                ),
-                                const SizedBox(height: 24),
-                                // Date of birth
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      lang.t('date_of_birth'),
-                                      style: const TextStyle(
-                                        fontFamily: 'Plus Jakarta Sans',
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w500,
-                                        color: Color(0xFF64748B),
-                                      ),
+                                  readOnly: true,
+                                  trailing: const Padding(
+                                    padding: EdgeInsets.only(right: 16.0),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text("Verified", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 12)),
+                                        SizedBox(width: 4),
+                                        Icon(Icons.check_circle, color: Colors.green, size: 16),
+                                      ],
                                     ),
-                                    const SizedBox(height: 8),
-                                    GestureDetector(
-                                      onTap: () async {
-                                        DateTime initial = DateTime(1995, 1, 1);
-                                        if (_dobController.text.isNotEmpty) {
-                                          try {
-                                            initial = DateTime.parse(_dobController.text);
-                                          } catch (_) {}
-                                        }
-                                        DateTime? picked = await showDatePicker(
-                                          context: context,
-                                          initialDate: initial,
-                                          firstDate: DateTime(1900),
-                                          lastDate: DateTime.now(),
-                                          builder: (context, child) => Theme(
-                                            data: Theme.of(context).copyWith(
-                                              colorScheme: const ColorScheme.light(
-                                                primary: Color(0xFFF27F0D),
-                                              ),
-                                            ),
-                                            child: child!,
-                                          ),
-                                        );
-                                        if (picked != null) {
-                                          setState(() {
-                                            _dobController.text =
-                                                '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
-                                          });
-                                        }
-                                      },
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                                        decoration: BoxDecoration(
-                                          color: Colors.white,
-                                          borderRadius: BorderRadius.circular(12),
-                                          border: Border.all(color: const Color(0xFFE5E7EB)),
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            const Icon(Icons.calendar_today, color: Color(0xFF94A3B8), size: 20),
-                                            const SizedBox(width: 12),
-                                            Text(
-                                              _dobController.text.isNotEmpty
-                                                  ? _dobController.text
-                                                  : 'Select date',
-                                              style: TextStyle(
-                                                fontFamily: 'Plus Jakarta Sans',
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.w500,
-                                                color: _dobController.text.isNotEmpty
-                                                    ? const Color(0xFF0F172A)
-                                                    : const Color(0xFF94A3B8),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ],
+                                  ),
                                 ),
                                 const SizedBox(height: 80),
                               ],
@@ -379,10 +438,10 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
                         height: 56,
                         child: ElevatedButton(
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFF27F0D),
+                            backgroundColor: const Color(0xFFF05A4F),
                             foregroundColor: Colors.white,
                             elevation: 4,
-                            shadowColor: const Color(0xFFF27F0D).withValues(alpha: 0.5),
+                            shadowColor: const Color(0xFFF05A4F).withValues(alpha: 0.5),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
@@ -420,6 +479,10 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
     required IconData icon,
     TextInputType keyboardType = TextInputType.text,
     bool readOnly = false,
+    String? errorText,
+    ValueChanged<String>? onChanged,
+    Widget? trailing,
+    List<TextInputFormatter>? inputFormatters,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -436,12 +499,14 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
           decoration: BoxDecoration(
             color: readOnly ? const Color(0xFFF8FAFC) : Colors.white,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFFE5E7EB)),
+            border: Border.all(color: errorText != null ? const Color(0xFFDC2626) : const Color(0xFFE5E7EB)),
           ),
           child: TextField(
             controller: controller,
             keyboardType: keyboardType,
             readOnly: readOnly,
+            onChanged: onChanged,
+            inputFormatters: inputFormatters,
             style: TextStyle(
               fontFamily: 'Plus Jakarta Sans',
               fontSize: 16,
@@ -452,12 +517,24 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
               border: InputBorder.none,
               prefixIcon: Icon(icon, color: const Color(0xFF94A3B8), size: 20),
               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              suffixIcon: readOnly
+              suffixIcon: trailing ?? (readOnly
                   ? const Icon(Icons.lock_outline, color: Color(0xFFCBD5E1), size: 18)
-                  : null,
+                  : null),
             ),
           ),
         ),
+        if (errorText != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 8, left: 4),
+            child: Text(
+              errorText,
+              style: const TextStyle(
+                fontFamily: 'Plus Jakarta Sans',
+                fontSize: 12,
+                color: Color(0xFFDC2626),
+              ),
+            ),
+          ),
       ],
     );
   }

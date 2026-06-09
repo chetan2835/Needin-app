@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
+import '../../core/services/local_storage_service.dart';
 import '../../core/widgets/fade_slide_in.dart';
-import 'account_details_screen.dart';
+import '../login/login_page.dart';
 
 class Onboarding3 extends StatelessWidget {
   const Onboarding3({super.key});
 
   Future<void> finishOnboarding(BuildContext context) async {
+    await LocalStorageService.setOnboardingComplete();
     if (context.mounted) {
-      // Navigate to Account Details Screen instead of Login Page
-      Navigator.pushReplacement(context,
-        MaterialPageRoute(builder: (_) => const AccountDetailsScreen()),
+      // Navigate to Login Page
+      Navigator.pushAndRemoveUntil(context,
+        MaterialPageRoute(builder: (_) => const LoginPage()),
+        (route) => false,
       );
     }
   }
@@ -64,10 +67,10 @@ class Onboarding3 extends StatelessWidget {
                                   height: 256,
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
-                                    color: const Color(0xFFF27F0D).withValues(alpha: 0.1),
+                                    color: const Color(0xFFF05A4F).withValues(alpha: 0.1),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: const Color(0xFFF27F0D).withValues(alpha: 0.1),
+                                        color: const Color(0xFFF05A4F).withValues(alpha: 0.1),
                                         blurRadius: 80,
                                         spreadRadius: 30,
                                       ),
@@ -136,7 +139,7 @@ class Onboarding3 extends StatelessWidget {
                                       ),
                                       child: const Icon(
                                         Icons.verified_user,
-                                        color: Color(0xFFF27F0D),
+                                        color: Color(0xFFF05A4F),
                                         size: 48,
                                       ),
                                     ),
@@ -216,7 +219,7 @@ class Onboarding3 extends StatelessWidget {
                         height: 6,
                         width: 32, // Active Indicator
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF27F0D), // primary
+                          color: const Color(0xFFF05A4F), // primary
                           borderRadius: BorderRadius.circular(20),
                         ),
                       ),
@@ -240,10 +243,10 @@ class Onboarding3 extends StatelessWidget {
                     height: 56, // py-4 roughly 56px with font
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFF27F0D),
+                        backgroundColor: const Color(0xFFF05A4F),
                         foregroundColor: Colors.white,
                         elevation: 6,
-                        shadowColor: const Color(0xFFF27F0D).withValues(alpha: 0.2),
+                        shadowColor: const Color(0xFFF05A4F).withValues(alpha: 0.2),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12), // xl
                         ),

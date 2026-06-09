@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../core/services/map_service.dart';
+import '../../core/constants/ui_utils.dart';
+import '../../core/services/map_marker_factory.dart';
+import '../../core/utils/earnings_formatter.dart';
+import '../../core/utils/transport_icon_mapper.dart';
 
 class JourneyDetailPage extends StatefulWidget {
   final Map<String, dynamic> journeyData;
@@ -59,17 +63,17 @@ class _JourneyDetailPageState extends State<JourneyDetailPage>
 
     if (oLat != null && oLng != null && dLat != null && dLng != null) {
       _markers = {
-        Marker(
-          markerId: const MarkerId('origin'),
+        MapMarkerFactory.createPickupMarker(
           position: LatLng(oLat, oLng),
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange),
-          infoWindow: InfoWindow(title: 'Origin', snippet: d['origin'] ?? ''),
+          title: 'Origin',
+          snippet: d['origin'] ?? '',
+          markerId: 'origin',
         ),
-        Marker(
-          markerId: const MarkerId('destination'),
+        MapMarkerFactory.createDropMarker(
           position: LatLng(dLat, dLng),
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-          infoWindow: InfoWindow(title: 'Destination', snippet: d['destination'] ?? ''),
+          title: 'Destination',
+          snippet: d['destination'] ?? '',
+          markerId: 'destination',
         ),
       };
 
@@ -81,7 +85,7 @@ class _JourneyDetailPageState extends State<JourneyDetailPage>
             Polyline(
               polylineId: const PolylineId('route'),
               points: points,
-              color: const Color(0xFFF27F0D),
+              color: const Color(0xFFF05A4F),
               width: 4,
             ),
           };
@@ -108,25 +112,11 @@ class _JourneyDetailPageState extends State<JourneyDetailPage>
 
   String _formatDate(String? isoDate) {
     if (isoDate == null) return 'Not set';
-    try {
-      final dt = DateTime.parse(isoDate);
-      final months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-      final ampm = dt.hour >= 12 ? "PM" : "AM";
-      final hour12 = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
-      return "${months[dt.month - 1]} ${dt.day}, ${dt.year} · $hour12:${dt.minute.toString().padLeft(2, '0')} $ampm";
-    } catch (_) {
-      return isoDate;
-    }
+    return UIUtils.formatJourneyDateTime(isoDate);
   }
 
   IconData _getTravelIcon(String? mode) {
-    switch (mode?.toLowerCase()) {
-      case 'flight': return Icons.flight;
-      case 'train': return Icons.train;
-      case 'bus': return Icons.directions_bus;
-      case 'bike': return Icons.two_wheeler;
-      default: return Icons.directions_car;
-    }
+    return TransportIconMapper.getIconForMode(mode);
   }
 
   String _getStatusLabel(String? status) {
@@ -144,20 +134,14 @@ class _JourneyDetailPageState extends State<JourneyDetailPage>
     switch (status?.toLowerCase()) {
       case 'active':
       case 'live': return const Color(0xFF16A34A);
-      case 'in_progress': return const Color(0xFFF27F0D);
+      case 'in_progress': return const Color(0xFFF05A4F);
       case 'completed': return const Color(0xFF64748B);
       default: return const Color(0xFF3B82F6);
     }
   }
 
   String _getEarnings() {
-    final d = widget.journeyData;
-    final small = d['price_small'];
-    final large = d['price_large'];
-    if (small != null && large != null) return "₹$small–₹$large";
-    final medium = d['price_medium'];
-    if (medium != null) return "₹$medium+";
-    return "₹--";
+    return EarningsFormatter.getEarningsRange(widget.journeyData);
   }
 
   @override
@@ -174,8 +158,10 @@ class _JourneyDetailPageState extends State<JourneyDetailPage>
     final dimensions = d['dimensions'] ?? 'Not set';
     final pFlex = d['pickup_flexibility'] ?? 'Not set';
     final dFlex = d['dropoff_flexibility'] ?? 'Not set';
-    final parcelSizesRaw = d['acceptable_parcel_sizes'] ?? '';
-    final List<String> parcelSizes = parcelSizesRaw.toString().split(', ').where((s) => s.isNotEmpty).toList();
+    final parcelSizesRaw = d['acceptable_parcel_sizes'];
+    final List<String> parcelSizes = parcelSizesRaw is List 
+        ? List<String>.from(parcelSizesRaw) 
+        : parcelSizesRaw?.toString().split(', ').where((s) => s.isNotEmpty).toList() ?? [];
     final additionalNotes = d['additional_notes'];
     final journeyId = d['id']?.toString() ?? '--';
     final hasMapData = _markers.isNotEmpty;
@@ -289,9 +275,9 @@ class _JourneyDetailPageState extends State<JourneyDetailPage>
                       Row(
                         children: [
                           Column(children: [
-                            Container(width: 12, height: 12, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: const Color(0xFFF27F0D), width: 2), color: Colors.white)),
+                            Container(width: 12, height: 12, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: const Color(0xFFF05A4F), width: 2), color: Colors.white)),
                             Container(height: 36, width: 2, color: const Color(0xFFE2E8F0)),
-                            Container(width: 12, height: 12, decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFFF27F0D))),
+                            Container(width: 12, height: 12, decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFFF05A4F))),
                           ]),
                           const SizedBox(width: 16),
                           Expanded(
@@ -399,22 +385,28 @@ class _JourneyDetailPageState extends State<JourneyDetailPage>
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [const Color(0xFFF27F0D).withValues(alpha: 0.08), const Color(0xFFF27F0D).withValues(alpha: 0.02)],
+                      colors: [const Color(0xFF16A34A).withValues(alpha: 0.08), const Color(0xFF16A34A).withValues(alpha: 0.02)],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFFF27F0D).withValues(alpha: 0.15)),
+                    border: Border.all(color: const Color(0xFF16A34A).withValues(alpha: 0.15)),
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text("EST. EARNINGS", style: TextStyle(fontFamily: "Plus Jakarta Sans", fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 0.5, color: const Color(0xFFF27F0D).withValues(alpha: 0.8))),
-                        const SizedBox(height: 4),
-                        const Text("Based on capacity filled", style: TextStyle(fontFamily: "Plus Jakarta Sans", fontSize: 12, color: Color(0xFF94A3B8))),
-                      ]),
-                      Text(_getEarnings(), style: const TextStyle(fontFamily: "Plus Jakarta Sans", fontSize: 30, fontWeight: FontWeight.w800, color: Color(0xFFF27F0D))),
+                      Text("EST. EARNINGS", style: TextStyle(fontFamily: "Plus Jakarta Sans", fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 0.5, color: const Color(0xFF16A34A).withValues(alpha: 0.8))),
+                      const SizedBox(height: 4),
+                      const Text("Based on capacity filled", style: TextStyle(fontFamily: "Plus Jakarta Sans", fontSize: 12, color: Color(0xFF94A3B8))),
+                      const SizedBox(height: 12),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          _getEarnings(),
+                          style: const TextStyle(fontFamily: "Plus Jakarta Sans", fontSize: 30, fontWeight: FontWeight.w800, color: Color(0xFF16A34A)),
+                        ),
+                      ),
                     ],
                   ),
                 )),
@@ -466,10 +458,10 @@ class _JourneyDetailPageState extends State<JourneyDetailPage>
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: const Color(0xFFF27F0D).withValues(alpha: 0.1),
+              color: const Color(0xFFF05A4F).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(icon, size: 18, color: const Color(0xFFF27F0D)),
+            child: Icon(icon, size: 18, color: const Color(0xFFF05A4F)),
           ),
           const SizedBox(width: 12),
           Text(title, style: const TextStyle(fontFamily: "Plus Jakarta Sans", fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
@@ -501,11 +493,11 @@ class _JourneyDetailPageState extends State<JourneyDetailPage>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: const Color(0xFFF27F0D).withValues(alpha: 0.08),
+        color: const Color(0xFFF05A4F).withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFF27F0D).withValues(alpha: 0.2)),
+        border: Border.all(color: const Color(0xFFF05A4F).withValues(alpha: 0.2)),
       ),
-      child: Text(text, style: const TextStyle(fontFamily: "Plus Jakarta Sans", fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFFF27F0D))),
+      child: Text(text, style: const TextStyle(fontFamily: "Plus Jakarta Sans", fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFFF05A4F))),
     );
   }
 }

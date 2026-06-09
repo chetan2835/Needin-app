@@ -37,7 +37,7 @@ class VerificationStatusReviewingPage extends StatelessWidget {
                 width: 120,
                 height: 120,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFEF3C7), // amber-100
+                  color: const Color(0xFFFFF5F4), // coral-50
                   shape: BoxShape.circle,
                 ),
                 child: const Center(
@@ -69,7 +69,7 @@ class VerificationStatusReviewingPage extends StatelessWidget {
               const Spacer(),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFF8000),
+                  backgroundColor: const Color(0xFFF05A4F),
                   foregroundColor: Colors.white,
                   minimumSize: const Size(double.infinity, 56),
                   shape: RoundedRectangleBorder(

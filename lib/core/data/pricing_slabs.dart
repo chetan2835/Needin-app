@@ -1,7 +1,13 @@
 // ══════════════════════════════════════════════════════════════
-//  NEEDIN EXPRESS — Official Pricing Data v3.0
+//  NEEDIN EXPRESS — Official Pricing Data v5.0
 //  SINGLE SOURCE OF TRUTH for all slab data
-//  Exact match to official pricing specification document
+//  Exact match to official "Vertical Slab Pricing" table (2026-05-09)
+//
+//  KEY CHANGES from v4:
+//  - Complete rewrite of ALL slab values to match the official
+//    Needin Express Vertical Slab Pricing table exactly.
+//  - underTime values are the ONLY displayed "Potential Earnings".
+//  - delay30 and delayAbove30 retained for backend settlement.
 // ══════════════════════════════════════════════════════════════
 
 import '../services/pricing_engine.dart';
@@ -14,54 +20,55 @@ export '../services/pricing_engine.dart';
 class SlabEntry {
   final int minKm;
   final int maxKm;
-  final int underTime;
-  final int delay60;
-  final int delayAbove60;
+  final int underTime;     // Within ETR + 10% grace
+  final int delay30;       // Delay ≤30% beyond ETR
+  final int delayAbove30;  // Delay >30% beyond ETR
 
   const SlabEntry({
     required this.minKm,
     required this.maxKm,
     required this.underTime,
-    required this.delay60,
-    required this.delayAbove60,
+    required this.delay30,
+    required this.delayAbove30,
   });
 }
 
 // ══════════════════════════════════════════════════════════════
 //  SAME CITY FIXED PRICING (Floor Model)
 //  Base: ₹99 × 0.5 = ₹49.5 → Floor → ₹49
+//  Threshold: ≤15 km driving distance
 // ══════════════════════════════════════════════════════════════
 
 class SameCityPricing {
+  /// Same city threshold in kilometres (driving distance)
+  static const double thresholdKm = 15.0;
+
   static const _prices = {
-    'small':  { 'under_time': 49, 'delay_60': 49, 'delay_above_60': 49 },
-    'medium': { 'under_time': 79, 'delay_60': 69, 'delay_above_60': 59 },
-    'large':  { 'under_time': 99, 'delay_60': 89, 'delay_above_60': 79 },
+    'small':  { 'under_time': 49, 'delay_30': 49, 'delay_above_30': 49 },
+    'medium': { 'under_time': 79, 'delay_30': 69, 'delay_above_30': 59 },
+    'large':  { 'under_time': 99, 'delay_30': 89, 'delay_above_30': 79 },
   };
 
   static int getPrice(String size, TimePerformance perf) {
     final sizeKey = size.toLowerCase();
     final perfKey = perf == TimePerformance.underTime ? 'under_time'
-        : perf == TimePerformance.delayUpTo60 ? 'delay_60'
-        : 'delay_above_60';
+        : perf == TimePerformance.delayUpTo30 ? 'delay_30'
+        : 'delay_above_30';
     return _prices[sizeKey]?[perfKey] ?? 49;
   }
 }
 
 // ══════════════════════════════════════════════════════════════
 //  FLIGHT FIXED PRICING
-//  Ignores all other logic
-//  Flight parcel definitions:
-//  - Micro: L,W,H < 1 ft, weight ≤ 1 kg
-//  - Small: L,W,H ≤ 1 ft, weight ≤ 5 kg
-//  - Medium: L,W,H ≤ 2 ft, weight ≤ 10 kg
+//  Ignores all distance slabs and time multipliers
+//  small=₹449, medium=₹649, large=₹949
 // ══════════════════════════════════════════════════════════════
 
 class FlightPricing {
   static const _prices = {
-    'micro': 449,
-    'small': 649,
-    'medium': 949,
+    'small': 449,
+    'medium': 649,
+    'large': 949,
   };
 
   static int getPrice(String size) {
@@ -69,6 +76,10 @@ class FlightPricing {
   }
 
   /// Classify a parcel for flight based on dimensions and weight
+  /// Micro (<1ft all sides, ≤1kg) → maps to small fare
+  /// Small (≤1ft all sides, ≤3kg)
+  /// Medium (≤3ft all sides, ≤15kg)
+  /// Large (≤5ft all sides, ≤50kg)
   static String classifyFlightParcel({
     required double lengthFt,
     required double widthFt,
@@ -76,147 +87,191 @@ class FlightPricing {
     required double weightKg,
   }) {
     if (lengthFt < 1 && widthFt < 1 && heightFt < 1 && weightKg <= 1) {
-      return 'micro';
-    } else if (lengthFt <= 1 && widthFt <= 1 && heightFt <= 1 && weightKg <= 5) {
+      return 'small'; // Micro maps to small fare
+    } else if (lengthFt <= 1 && widthFt <= 1 && heightFt <= 1 && weightKg <= 3) {
       return 'small';
-    } else if (lengthFt <= 2 && widthFt <= 2 && heightFt <= 2 && weightKg <= 10) {
+    } else if (lengthFt <= 3 && widthFt <= 3 && heightFt <= 3 && weightKg <= 15) {
+      return 'medium';
+    } else if (lengthFt <= 5 && widthFt <= 5 && heightFt <= 5 && weightKg <= 50) {
+      return 'large';
+    }
+    return 'large'; // Default to large for oversized
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+//  NEEDIN DROP PARTNER PRICING (per 24 hours)
+// ══════════════════════════════════════════════════════════════
+
+class DropPartnerPricing {
+  static const _fees = {
+    'small': 50,
+    'medium': 100,
+    'large': 150,
+  };
+
+  static int getFee(String size) {
+    return _fees[size.toLowerCase()] ?? 50;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+//  PARCEL SIZE CLASSIFICATION (All Modes)
+// ══════════════════════════════════════════════════════════════
+
+class ParcelClassification {
+  /// Classify parcel based on dimensions (inches) and weight (kg)
+  /// Returns 'small', 'medium', or 'large'
+  /// Returns null if parcel exceeds platform limits
+  static String? classify({
+    required double lengthIn,
+    required double widthIn,
+    required double heightIn,
+    required double weightKg,
+  }) {
+    // Platform limit: 60x60x60 inches, 50 kg
+    if (lengthIn > 60 || widthIn > 60 || heightIn > 60 || weightKg > 50) {
+      return null; // Exceeds platform limits
+    }
+
+    // Small: All dims ≤12in AND weight ≤5kg
+    if (lengthIn <= 12 && widthIn <= 12 && heightIn <= 12 && weightKg <= 5) {
+      return 'small';
+    }
+
+    // Medium: All dims ≤36in AND weight ≤15kg
+    if (lengthIn <= 36 && widthIn <= 36 && heightIn <= 36 && weightKg <= 15) {
       return 'medium';
     }
-    return 'medium'; // Cap at medium for flight
+
+    // Large: Within platform limits
+    return 'large';
   }
 }
 
 // ══════════════════════════════════════════════════════════════
 //  CITY-TO-CITY DISTANCE SLAB TABLES
-//  Small (A), Medium (B), Large (C)
-//  Part 1: 1–1200 KM
-//  Part 2: 1201–3000 KM (₹20 increment per 100 KM after 1200)
+//  Official Needin Express Vertical Slab Pricing v5.0
+//  Exact match to the official pricing table image.
+//
+//  underTime = base price (displayed as "Potential Earnings")
+//  delay30   = 85% of underTime (rounded)
+//  delayAbove30 = 75% of underTime (rounded)
 // ══════════════════════════════════════════════════════════════
 
 class CityToCitySlabs {
-  // ── SMALL PARCEL (A) — 1–1200 KM ──
-  static const List<SlabEntry> smallSlabs1200 = [
-    SlabEntry(minKm: 1,    maxKm: 100,  underTime: 99,  delay60: 89,  delayAbove60: 79),
-    SlabEntry(minKm: 101,  maxKm: 200,  underTime: 129, delay60: 109, delayAbove60: 99),
-    SlabEntry(minKm: 201,  maxKm: 300,  underTime: 159, delay60: 139, delayAbove60: 119),
-    SlabEntry(minKm: 301,  maxKm: 400,  underTime: 189, delay60: 159, delayAbove60: 139),
-    SlabEntry(minKm: 401,  maxKm: 500,  underTime: 219, delay60: 189, delayAbove60: 169),
-    SlabEntry(minKm: 501,  maxKm: 600,  underTime: 249, delay60: 209, delayAbove60: 189),
-    SlabEntry(minKm: 601,  maxKm: 700,  underTime: 279, delay60: 239, delayAbove60: 209),
-    SlabEntry(minKm: 701,  maxKm: 800,  underTime: 309, delay60: 259, delayAbove60: 229),
-    SlabEntry(minKm: 801,  maxKm: 900,  underTime: 339, delay60: 289, delayAbove60: 259),
-    SlabEntry(minKm: 901,  maxKm: 1000, underTime: 369, delay60: 319, delayAbove60: 279),
-    SlabEntry(minKm: 1001, maxKm: 1100, underTime: 399, delay60: 339, delayAbove60: 299),
-    SlabEntry(minKm: 1101, maxKm: 1200, underTime: 429, delay60: 369, delayAbove60: 319),
+
+  // ── SMALL PARCEL — 1–3000 KM ──
+  static const List<SlabEntry> smallSlabs = [
+    SlabEntry(minKm: 1,    maxKm: 100,  underTime:  99,  delay30:  84,  delayAbove30:  74),
+    SlabEntry(minKm: 101,  maxKm: 200,  underTime: 129,  delay30: 110,  delayAbove30:  97),
+    SlabEntry(minKm: 201,  maxKm: 300,  underTime: 159,  delay30: 135,  delayAbove30: 119),
+    SlabEntry(minKm: 301,  maxKm: 400,  underTime: 189,  delay30: 161,  delayAbove30: 142),
+    SlabEntry(minKm: 401,  maxKm: 500,  underTime: 219,  delay30: 186,  delayAbove30: 164),
+    SlabEntry(minKm: 501,  maxKm: 600,  underTime: 249,  delay30: 212,  delayAbove30: 187),
+    SlabEntry(minKm: 601,  maxKm: 700,  underTime: 279,  delay30: 237,  delayAbove30: 209),
+    SlabEntry(minKm: 701,  maxKm: 800,  underTime: 309,  delay30: 263,  delayAbove30: 232),
+    SlabEntry(minKm: 801,  maxKm: 900,  underTime: 339,  delay30: 288,  delayAbove30: 254),
+    SlabEntry(minKm: 901,  maxKm: 1000, underTime: 369,  delay30: 314,  delayAbove30: 277),
+    SlabEntry(minKm: 1001, maxKm: 1100, underTime: 399,  delay30: 339,  delayAbove30: 299),
+    SlabEntry(minKm: 1101, maxKm: 1200, underTime: 429,  delay30: 365,  delayAbove30: 322),
+    SlabEntry(minKm: 1201, maxKm: 1300, underTime: 429,  delay30: 365,  delayAbove30: 322),
+    SlabEntry(minKm: 1301, maxKm: 1400, underTime: 459,  delay30: 390,  delayAbove30: 344),
+    SlabEntry(minKm: 1401, maxKm: 1500, underTime: 499,  delay30: 424,  delayAbove30: 374),
+    SlabEntry(minKm: 1501, maxKm: 1600, underTime: 529,  delay30: 450,  delayAbove30: 397),
+    SlabEntry(minKm: 1601, maxKm: 1700, underTime: 569,  delay30: 484,  delayAbove30: 427),
+    SlabEntry(minKm: 1701, maxKm: 1800, underTime: 599,  delay30: 509,  delayAbove30: 449),
+    SlabEntry(minKm: 1801, maxKm: 1900, underTime: 639,  delay30: 543,  delayAbove30: 479),
+    SlabEntry(minKm: 1901, maxKm: 2000, underTime: 669,  delay30: 569,  delayAbove30: 502),
+    SlabEntry(minKm: 2001, maxKm: 2100, underTime: 709,  delay30: 603,  delayAbove30: 532),
+    SlabEntry(minKm: 2101, maxKm: 2200, underTime: 739,  delay30: 628,  delayAbove30: 554),
+    SlabEntry(minKm: 2201, maxKm: 2300, underTime: 779,  delay30: 662,  delayAbove30: 584),
+    SlabEntry(minKm: 2301, maxKm: 2400, underTime: 809,  delay30: 688,  delayAbove30: 607),
+    SlabEntry(minKm: 2401, maxKm: 2500, underTime: 849,  delay30: 722,  delayAbove30: 637),
+    SlabEntry(minKm: 2501, maxKm: 2600, underTime: 879,  delay30: 747,  delayAbove30: 659),
+    SlabEntry(minKm: 2601, maxKm: 2700, underTime: 919,  delay30: 781,  delayAbove30: 689),
+    SlabEntry(minKm: 2701, maxKm: 2800, underTime: 949,  delay30: 807,  delayAbove30: 712),
+    SlabEntry(minKm: 2801, maxKm: 2900, underTime: 989,  delay30: 841,  delayAbove30: 742),
+    SlabEntry(minKm: 2901, maxKm: 3000, underTime: 1019, delay30: 866,  delayAbove30: 764),
   ];
 
-  // ── SMALL PARCEL (A) — 1201–3000 KM ──
-  static const List<SlabEntry> smallSlabs3000 = [
-    SlabEntry(minKm: 1201, maxKm: 1300, underTime: 449, delay60: 379, delayAbove60: 339),
-    SlabEntry(minKm: 1301, maxKm: 1400, underTime: 469, delay60: 399, delayAbove60: 349),
-    SlabEntry(minKm: 1401, maxKm: 1500, underTime: 489, delay60: 419, delayAbove60: 369),
-    SlabEntry(minKm: 1501, maxKm: 1600, underTime: 509, delay60: 429, delayAbove60: 379),
-    SlabEntry(minKm: 1601, maxKm: 1700, underTime: 529, delay60: 449, delayAbove60: 399),
-    SlabEntry(minKm: 1701, maxKm: 1800, underTime: 549, delay60: 469, delayAbove60: 409),
-    SlabEntry(minKm: 1801, maxKm: 1900, underTime: 569, delay60: 479, delayAbove60: 429),
-    SlabEntry(minKm: 1901, maxKm: 2000, underTime: 589, delay60: 499, delayAbove60: 439),
-    SlabEntry(minKm: 2001, maxKm: 2100, underTime: 609, delay60: 519, delayAbove60: 459),
-    SlabEntry(minKm: 2101, maxKm: 2200, underTime: 629, delay60: 529, delayAbove60: 469),
-    SlabEntry(minKm: 2201, maxKm: 2300, underTime: 649, delay60: 549, delayAbove60: 489),
-    SlabEntry(minKm: 2301, maxKm: 2400, underTime: 669, delay60: 569, delayAbove60: 499),
-    SlabEntry(minKm: 2401, maxKm: 2500, underTime: 689, delay60: 579, delayAbove60: 519),
-    SlabEntry(minKm: 2501, maxKm: 2600, underTime: 709, delay60: 599, delayAbove60: 529),
-    SlabEntry(minKm: 2601, maxKm: 2700, underTime: 729, delay60: 619, delayAbove60: 549),
-    SlabEntry(minKm: 2701, maxKm: 2800, underTime: 749, delay60: 629, delayAbove60: 559),
-    SlabEntry(minKm: 2801, maxKm: 2900, underTime: 769, delay60: 649, delayAbove60: 579),
-    SlabEntry(minKm: 2901, maxKm: 3000, underTime: 789, delay60: 669, delayAbove60: 589),
+  // ── MEDIUM PARCEL — 1–3000 KM ──
+  static const List<SlabEntry> mediumSlabs = [
+    SlabEntry(minKm: 1,    maxKm: 100,  underTime:  149,  delay30:  127,  delayAbove30:  112),
+    SlabEntry(minKm: 101,  maxKm: 200,  underTime:  189,  delay30:  161,  delayAbove30:  142),
+    SlabEntry(minKm: 201,  maxKm: 300,  underTime:  239,  delay30:  203,  delayAbove30:  179),
+    SlabEntry(minKm: 301,  maxKm: 400,  underTime:  279,  delay30:  237,  delayAbove30:  209),
+    SlabEntry(minKm: 401,  maxKm: 500,  underTime:  329,  delay30:  280,  delayAbove30:  247),
+    SlabEntry(minKm: 501,  maxKm: 600,  underTime:  369,  delay30:  314,  delayAbove30:  277),
+    SlabEntry(minKm: 601,  maxKm: 700,  underTime:  419,  delay30:  356,  delayAbove30:  314),
+    SlabEntry(minKm: 701,  maxKm: 800,  underTime:  459,  delay30:  390,  delayAbove30:  344),
+    SlabEntry(minKm: 801,  maxKm: 900,  underTime:  509,  delay30:  433,  delayAbove30:  382),
+    SlabEntry(minKm: 901,  maxKm: 1000, underTime:  549,  delay30:  467,  delayAbove30:  412),
+    SlabEntry(minKm: 1001, maxKm: 1100, underTime:  599,  delay30:  509,  delayAbove30:  449),
+    SlabEntry(minKm: 1101, maxKm: 1200, underTime:  639,  delay30:  543,  delayAbove30:  479),
+    SlabEntry(minKm: 1201, maxKm: 1300, underTime:  649,  delay30:  552,  delayAbove30:  487),
+    SlabEntry(minKm: 1301, maxKm: 1400, underTime:  689,  delay30:  586,  delayAbove30:  517),
+    SlabEntry(minKm: 1401, maxKm: 1500, underTime:  749,  delay30:  637,  delayAbove30:  562),
+    SlabEntry(minKm: 1501, maxKm: 1600, underTime:  799,  delay30:  679,  delayAbove30:  599),
+    SlabEntry(minKm: 1601, maxKm: 1700, underTime:  859,  delay30:  730,  delayAbove30:  644),
+    SlabEntry(minKm: 1701, maxKm: 1800, underTime:  899,  delay30:  764,  delayAbove30:  674),
+    SlabEntry(minKm: 1801, maxKm: 1900, underTime:  959,  delay30:  815,  delayAbove30:  719),
+    SlabEntry(minKm: 1901, maxKm: 2000, underTime: 1009,  delay30:  858,  delayAbove30:  757),
+    SlabEntry(minKm: 2001, maxKm: 2100, underTime: 1069,  delay30:  909,  delayAbove30:  802),
+    SlabEntry(minKm: 2101, maxKm: 2200, underTime: 1109,  delay30:  943,  delayAbove30:  832),
+    SlabEntry(minKm: 2201, maxKm: 2300, underTime: 1169,  delay30:  994,  delayAbove30:  877),
+    SlabEntry(minKm: 2301, maxKm: 2400, underTime: 1219,  delay30: 1036,  delayAbove30:  914),
+    SlabEntry(minKm: 2401, maxKm: 2500, underTime: 1279,  delay30: 1087,  delayAbove30:  959),
+    SlabEntry(minKm: 2501, maxKm: 2600, underTime: 1319,  delay30: 1121,  delayAbove30:  989),
+    SlabEntry(minKm: 2601, maxKm: 2700, underTime: 1379,  delay30: 1172,  delayAbove30: 1034),
+    SlabEntry(minKm: 2701, maxKm: 2800, underTime: 1419,  delay30: 1206,  delayAbove30: 1064),
+    SlabEntry(minKm: 2801, maxKm: 2900, underTime: 1489,  delay30: 1266,  delayAbove30: 1117),
+    SlabEntry(minKm: 2901, maxKm: 3000, underTime: 1529,  delay30: 1300,  delayAbove30: 1147),
   ];
 
-  // ── MEDIUM PARCEL (B) — 1–1200 KM ──
-  static const List<SlabEntry> mediumSlabs1200 = [
-    SlabEntry(minKm: 1,    maxKm: 100,  underTime: 149, delay60: 129, delayAbove60: 109),
-    SlabEntry(minKm: 101,  maxKm: 200,  underTime: 189, delay60: 159, delayAbove60: 139),
-    SlabEntry(minKm: 201,  maxKm: 300,  underTime: 239, delay60: 209, delayAbove60: 179),
-    SlabEntry(minKm: 301,  maxKm: 400,  underTime: 279, delay60: 239, delayAbove60: 209),
-    SlabEntry(minKm: 401,  maxKm: 500,  underTime: 329, delay60: 279, delayAbove60: 249),
-    SlabEntry(minKm: 501,  maxKm: 600,  underTime: 369, delay60: 319, delayAbove60: 279),
-    SlabEntry(minKm: 601,  maxKm: 700,  underTime: 419, delay60: 359, delayAbove60: 319),
-    SlabEntry(minKm: 701,  maxKm: 800,  underTime: 459, delay60: 389, delayAbove60: 349),
-    SlabEntry(minKm: 801,  maxKm: 900,  underTime: 509, delay60: 429, delayAbove60: 379),
-    SlabEntry(minKm: 901,  maxKm: 1000, underTime: 549, delay60: 469, delayAbove60: 409),
-    SlabEntry(minKm: 1001, maxKm: 1100, underTime: 599, delay60: 509, delayAbove60: 449),
-    SlabEntry(minKm: 1101, maxKm: 1200, underTime: 639, delay60: 539, delayAbove60: 479),
+  // ── LARGE PARCEL — 1–3000 KM ──
+  static const List<SlabEntry> largeSlabs = [
+    SlabEntry(minKm: 1,    maxKm: 100,  underTime:  199,  delay30:  169,  delayAbove30:  149),
+    SlabEntry(minKm: 101,  maxKm: 200,  underTime:  259,  delay30:  220,  delayAbove30:  194),
+    SlabEntry(minKm: 201,  maxKm: 300,  underTime:  319,  delay30:  271,  delayAbove30:  239),
+    SlabEntry(minKm: 301,  maxKm: 400,  underTime:  379,  delay30:  322,  delayAbove30:  284),
+    SlabEntry(minKm: 401,  maxKm: 500,  underTime:  439,  delay30:  373,  delayAbove30:  329),
+    SlabEntry(minKm: 501,  maxKm: 600,  underTime:  499,  delay30:  424,  delayAbove30:  374),
+    SlabEntry(minKm: 601,  maxKm: 700,  underTime:  559,  delay30:  475,  delayAbove30:  419),
+    SlabEntry(minKm: 701,  maxKm: 800,  underTime:  619,  delay30:  526,  delayAbove30:  464),
+    SlabEntry(minKm: 801,  maxKm: 900,  underTime:  679,  delay30:  577,  delayAbove30:  509),
+    SlabEntry(minKm: 901,  maxKm: 1000, underTime:  739,  delay30:  628,  delayAbove30:  554),
+    SlabEntry(minKm: 1001, maxKm: 1100, underTime:  799,  delay30:  679,  delayAbove30:  599),
+    SlabEntry(minKm: 1101, maxKm: 1200, underTime:  859,  delay30:  730,  delayAbove30:  644),
+    SlabEntry(minKm: 1201, maxKm: 1300, underTime:  859,  delay30:  730,  delayAbove30:  644),
+    SlabEntry(minKm: 1301, maxKm: 1400, underTime:  919,  delay30:  781,  delayAbove30:  689),
+    SlabEntry(minKm: 1401, maxKm: 1500, underTime:  999,  delay30:  849,  delayAbove30:  749),
+    SlabEntry(minKm: 1501, maxKm: 1600, underTime: 1059,  delay30:  900,  delayAbove30:  794),
+    SlabEntry(minKm: 1601, maxKm: 1700, underTime: 1139,  delay30:  968,  delayAbove30:  854),
+    SlabEntry(minKm: 1701, maxKm: 1800, underTime: 1199,  delay30: 1019,  delayAbove30:  899),
+    SlabEntry(minKm: 1801, maxKm: 1900, underTime: 1279,  delay30: 1087,  delayAbove30:  959),
+    SlabEntry(minKm: 1901, maxKm: 2000, underTime: 1339,  delay30: 1138,  delayAbove30: 1004),
+    SlabEntry(minKm: 2001, maxKm: 2100, underTime: 1419,  delay30: 1206,  delayAbove30: 1064),
+    SlabEntry(minKm: 2101, maxKm: 2200, underTime: 1479,  delay30: 1257,  delayAbove30: 1109),
+    SlabEntry(minKm: 2201, maxKm: 2300, underTime: 1559,  delay30: 1325,  delayAbove30: 1169),
+    SlabEntry(minKm: 2301, maxKm: 2400, underTime: 1619,  delay30: 1376,  delayAbove30: 1214),
+    SlabEntry(minKm: 2401, maxKm: 2500, underTime: 1699,  delay30: 1444,  delayAbove30: 1274),
+    SlabEntry(minKm: 2501, maxKm: 2600, underTime: 1759,  delay30: 1495,  delayAbove30: 1319),
+    SlabEntry(minKm: 2601, maxKm: 2700, underTime: 1839,  delay30: 1563,  delayAbove30: 1379),
+    SlabEntry(minKm: 2701, maxKm: 2800, underTime: 1899,  delay30: 1614,  delayAbove30: 1424),
+    SlabEntry(minKm: 2801, maxKm: 2900, underTime: 1979,  delay30: 1682,  delayAbove30: 1484),
+    SlabEntry(minKm: 2901, maxKm: 3000, underTime: 2039,  delay30: 1733,  delayAbove30: 1529),
   ];
 
-  // ── MEDIUM PARCEL (B) — 1201–3000 KM ──
-  static const List<SlabEntry> mediumSlabs3000 = [
-    SlabEntry(minKm: 1201, maxKm: 1300, underTime: 669, delay60: 569, delayAbove60: 499),
-    SlabEntry(minKm: 1301, maxKm: 1400, underTime: 699, delay60: 589, delayAbove60: 519),
-    SlabEntry(minKm: 1401, maxKm: 1500, underTime: 729, delay60: 619, delayAbove60: 549),
-    SlabEntry(minKm: 1501, maxKm: 1600, underTime: 759, delay60: 649, delayAbove60: 569),
-    SlabEntry(minKm: 1601, maxKm: 1700, underTime: 789, delay60: 669, delayAbove60: 589),
-    SlabEntry(minKm: 1701, maxKm: 1800, underTime: 819, delay60: 699, delayAbove60: 609),
-    SlabEntry(minKm: 1801, maxKm: 1900, underTime: 849, delay60: 719, delayAbove60: 629),
-    SlabEntry(minKm: 1901, maxKm: 2000, underTime: 879, delay60: 749, delayAbove60: 659),
-    SlabEntry(minKm: 2001, maxKm: 2100, underTime: 909, delay60: 769, delayAbove60: 679),
-    SlabEntry(minKm: 2101, maxKm: 2200, underTime: 939, delay60: 799, delayAbove60: 699),
-    SlabEntry(minKm: 2201, maxKm: 2300, underTime: 969, delay60: 819, delayAbove60: 719),
-    SlabEntry(minKm: 2301, maxKm: 2400, underTime: 999, delay60: 849, delayAbove60: 749),
-    SlabEntry(minKm: 2401, maxKm: 2500, underTime: 1029, delay60: 869, delayAbove60: 769),
-    SlabEntry(minKm: 2501, maxKm: 2600, underTime: 1059, delay60: 899, delayAbove60: 789),
-    SlabEntry(minKm: 2601, maxKm: 2700, underTime: 1089, delay60: 919, delayAbove60: 819),
-    SlabEntry(minKm: 2701, maxKm: 2800, underTime: 1119, delay60: 949, delayAbove60: 839),
-    SlabEntry(minKm: 2801, maxKm: 2900, underTime: 1149, delay60: 969, delayAbove60: 869),
-    SlabEntry(minKm: 2901, maxKm: 3000, underTime: 1179, delay60: 999, delayAbove60: 889),
-  ];
-
-  // ── LARGE PARCEL (C) — 1–1200 KM ──
-  static const List<SlabEntry> largeSlabs1200 = [
-    SlabEntry(minKm: 1,    maxKm: 100,  underTime: 199, delay60: 169, delayAbove60: 149),
-    SlabEntry(minKm: 101,  maxKm: 200,  underTime: 259, delay60: 219, delayAbove60: 199),
-    SlabEntry(minKm: 201,  maxKm: 300,  underTime: 319, delay60: 269, delayAbove60: 239),
-    SlabEntry(minKm: 301,  maxKm: 400,  underTime: 379, delay60: 319, delayAbove60: 279),
-    SlabEntry(minKm: 401,  maxKm: 500,  underTime: 439, delay60: 369, delayAbove60: 319),
-    SlabEntry(minKm: 501,  maxKm: 600,  underTime: 499, delay60: 419, delayAbove60: 369),
-    SlabEntry(minKm: 601,  maxKm: 700,  underTime: 559, delay60: 469, delayAbove60: 409),
-    SlabEntry(minKm: 701,  maxKm: 800,  underTime: 619, delay60: 519, delayAbove60: 459),
-    SlabEntry(minKm: 801,  maxKm: 900,  underTime: 679, delay60: 569, delayAbove60: 499),
-    SlabEntry(minKm: 901,  maxKm: 1000, underTime: 739, delay60: 619, delayAbove60: 549),
-    SlabEntry(minKm: 1001, maxKm: 1100, underTime: 799, delay60: 669, delayAbove60: 599),
-    SlabEntry(minKm: 1101, maxKm: 1200, underTime: 859, delay60: 719, delayAbove60: 639),
-  ];
-
-  // ── LARGE PARCEL (C) — 1201–3000 KM ──
-  static const List<SlabEntry> largeSlabs3000 = [
-    SlabEntry(minKm: 1201, maxKm: 1300, underTime: 899, delay60: 759, delayAbove60: 679),
-    SlabEntry(minKm: 1301, maxKm: 1400, underTime: 939, delay60: 799, delayAbove60: 699),
-    SlabEntry(minKm: 1401, maxKm: 1500, underTime: 979, delay60: 829, delayAbove60: 739),
-    SlabEntry(minKm: 1501, maxKm: 1600, underTime: 1019, delay60: 869, delayAbove60: 759),
-    SlabEntry(minKm: 1601, maxKm: 1700, underTime: 1059, delay60: 899, delayAbove60: 789),
-    SlabEntry(minKm: 1701, maxKm: 1800, underTime: 1099, delay60: 939, delayAbove60: 819),
-    SlabEntry(minKm: 1801, maxKm: 1900, underTime: 1139, delay60: 969, delayAbove60: 849),
-    SlabEntry(minKm: 1901, maxKm: 2000, underTime: 1179, delay60: 999, delayAbove60: 879),
-    SlabEntry(minKm: 2001, maxKm: 2100, underTime: 1219, delay60: 1039, delayAbove60: 919),
-    SlabEntry(minKm: 2101, maxKm: 2200, underTime: 1259, delay60: 1069, delayAbove60: 949),
-    SlabEntry(minKm: 2201, maxKm: 2300, underTime: 1299, delay60: 1109, delayAbove60: 979),
-    SlabEntry(minKm: 2301, maxKm: 2400, underTime: 1339, delay60: 1139, delayAbove60: 1009),
-    SlabEntry(minKm: 2401, maxKm: 2500, underTime: 1379, delay60: 1169, delayAbove60: 1039),
-    SlabEntry(minKm: 2501, maxKm: 2600, underTime: 1419, delay60: 1209, delayAbove60: 1069),
-    SlabEntry(minKm: 2601, maxKm: 2700, underTime: 1459, delay60: 1239, delayAbove60: 1109),
-    SlabEntry(minKm: 2701, maxKm: 2800, underTime: 1499, delay60: 1279, delayAbove60: 1139),
-    SlabEntry(minKm: 2801, maxKm: 2900, underTime: 1539, delay60: 1309, delayAbove60: 1169),
-    SlabEntry(minKm: 2901, maxKm: 3000, underTime: 1579, delay60: 1349, delayAbove60: 1189),
-  ];
-
-  /// Get all slabs for a given parcel size (combined 1–3000 KM)
+  /// Get all slabs for a given parcel size
   static List<SlabEntry> getSlabs(ParcelSize size) {
     switch (size) {
       case ParcelSize.small:
-        return [...smallSlabs1200, ...smallSlabs3000];
+        return smallSlabs;
       case ParcelSize.medium:
-        return [...mediumSlabs1200, ...mediumSlabs3000];
+        return mediumSlabs;
       case ParcelSize.large:
-        return [...largeSlabs1200, ...largeSlabs3000];
+        return largeSlabs;
     }
   }
 
@@ -227,10 +282,7 @@ class CityToCitySlabs {
         return slab;
       }
     }
-    // Cap at max slab for distances > 3000 KM
-    if (km > 3000 && slabs.isNotEmpty) {
-      return slabs.last;
-    }
+    // Distance > 3000 km → return null (error case)
     return null;
   }
 }

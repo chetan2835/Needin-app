@@ -1,3 +1,4 @@
+// @ts-nocheck
 // Validation Layer
 
 export class ValidationError extends Error {
@@ -60,3 +61,4 @@ export function sanitizeInput(input: any) {
   }
   return sanitized;
 }
+

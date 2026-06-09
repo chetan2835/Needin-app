@@ -3,6 +3,7 @@ import 'package:uuid/uuid.dart';
 import '../../core/services/payment_service.dart';
 import '../../core/services/supabase_service.dart';
 import '../../core/services/auth_service.dart';
+import '../../core/widgets/email_verification_gate.dart';
 import 'transaction_receipt_page.dart';
 
 /// ══════════════════════════════════════════════════════════════
@@ -197,22 +198,24 @@ class _CheckoutPaymentPageState extends State<CheckoutPaymentPage> {
               SizedBox(
                 width: double.infinity,
                 height: 56,
-                child: ElevatedButton(
-                  onPressed: _isProcessing ? null : _startPayment,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFF27F0D),
-                    disabledBackgroundColor:
-                        const Color(0xFFF27F0D).withValues(alpha: 0.5),
-                    elevation: 4,
-                    shadowColor:
-                        const Color(0xFFF27F0D).withValues(alpha: 0.3),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                child: EmailVerificationGate(
+                  actionDescription: 'complete this payment',
+                  child: ElevatedButton(
+                    onPressed: _isProcessing ? null : _startPayment,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFF05A4F),
+                      disabledBackgroundColor:
+                          const Color(0xFFF05A4F).withValues(alpha: 0.5),
+                      elevation: 4,
+                      shadowColor:
+                          const Color(0xFFF05A4F).withValues(alpha: 0.3),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
-                  ),
-                  child: _isProcessing
-                      ? const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                    child: _isProcessing
+                        ? const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             SizedBox(
                               width: 20,
@@ -241,8 +244,9 @@ class _CheckoutPaymentPageState extends State<CheckoutPaymentPage> {
                             color: Colors.white,
                           ),
                         ),
-                ),
-              ),
+                  ), // closes ElevatedButton
+                ), // closes EmailVerificationGate
+              ), // closes SizedBox
             ],
           ),
         ),
@@ -269,7 +273,7 @@ class _CheckoutPaymentPageState extends State<CheckoutPaymentPage> {
             fontFamily: "Plus Jakarta Sans",
             fontSize: isTotal ? 20 : 16,
             fontWeight: isTotal ? FontWeight.bold : FontWeight.w600,
-            color: isTotal ? const Color(0xFFF27F0D) : const Color(0xFF0F172A),
+            color: isTotal ? const Color(0xFFF05A4F) : const Color(0xFF0F172A),
           ),
         ),
       ],

@@ -28,7 +28,7 @@ class ManagePaymentMethodsPage extends StatelessWidget {
           TextButton(
             onPressed: () {},
             style: TextButton.styleFrom(
-              foregroundColor: const Color(0xFFF27F0D), // primary
+              foregroundColor: const Color(0xFFF05A4F), // primary
               textStyle: const TextStyle(
                 fontFamily: "Plus Jakarta Sans",
                 fontSize: 14,
@@ -130,11 +130,11 @@ class ManagePaymentMethodsPage extends StatelessWidget {
               ),
               child: ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFF27F0D), // primary
+                  backgroundColor: const Color(0xFFF05A4F), // primary
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   elevation: 8,
-                  shadowColor: const Color(0xFFF27F0D).withValues(alpha: 0.4),
+                  shadowColor: const Color(0xFFF05A4F).withValues(alpha: 0.4),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -193,7 +193,7 @@ class ManagePaymentMethodsPage extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(
-                color: const Color(0xFFF27F0D),
+                color: const Color(0xFFF05A4F),
                 borderRadius: BorderRadius.circular(9999),
               ),
               child: const Text(
@@ -261,8 +261,8 @@ class ManagePaymentMethodsPage extends StatelessWidget {
                   Switch(
                     value: true,
                     onChanged: (val) {},
-                    activeThumbColor: const Color(0xFFF27F0D),
-                    activeTrackColor: const Color(0xFFF27F0D).withValues(alpha: 0.5),
+                    activeThumbColor: const Color(0xFFF05A4F),
+                    activeTrackColor: const Color(0xFFF05A4F).withValues(alpha: 0.5),
                   ),
                 ],
               ),
@@ -365,7 +365,7 @@ class ManagePaymentMethodsPage extends StatelessWidget {
                         children: [
                           Container(width: 12, height: 12, decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle)),
                           const SizedBox(width: 2),
-                          Container(width: 12, height: 12, decoration: const BoxDecoration(color: Colors.orange, shape: BoxShape.circle)),
+                          Container(width: 12, height: 12, decoration: const BoxDecoration(color: Color(0xFFF05A4F), shape: BoxShape.circle)),
                         ],
                       ),
                     ),
@@ -399,7 +399,7 @@ class ManagePaymentMethodsPage extends StatelessWidget {
               Switch(
                 value: false,
                 onChanged: (val) {},
-                activeThumbColor: const Color(0xFFF27F0D),
+                activeThumbColor: const Color(0xFFF05A4F),
               ),
             ],
           ),

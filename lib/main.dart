@@ -11,15 +11,22 @@ import 'firebase_options.dart';
 
 import 'core/providers/app_provider.dart';
 import 'core/providers/user_profile_provider.dart';
+import 'core/providers/notification_provider.dart';
+import 'core/providers/journey_draft_provider.dart';
+
 import 'core/services/language_service.dart';
-import 'screens/splash/splash_screen.dart';
-import 'screens/onboarding/onboarding1.dart';
-import 'screens/login/login_page.dart';
+import 'core/services/notification_service.dart';
+import 'core/services/session_manager.dart';
 import 'core/services/local_storage_service.dart';
-import 'screens/auth/mpin_screen.dart';
+import 'core/services/msg91_otp_service.dart';
+import 'screens/splash/splash_screen.dart';
+import 'core/widgets/in_app_notification_overlay.dart';
 import 'screens/needin_express/verification_success_screen.dart';
 import 'screens/needin_express/verification_failed_screen.dart';
+import 'screens/onboarding/onboarding1.dart';
+import 'screens/login/login_page.dart';
 import 'screens/login/service_selection_page.dart';
+import 'screens/login/profile_setup_page.dart';
 
 // IMPORTANT: Replace these with your actual Supabase URL and Anon Key.
 const String supabaseUrl = '';
@@ -59,11 +66,19 @@ void main() async {
   // Initialize language service
   await LanguageService().init();
 
+  // Initialize MSG91 OTP service
+  Msg91OtpService().initialize();
+
+  // Initialize notification service
+  await NotificationService().initialize();
+
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AppProvider()),
         ChangeNotifierProvider(create: (_) => UserProfileProvider()..loadProfile()),
+        ChangeNotifierProvider(create: (_) => NotificationProvider()..initialize()),
+        ChangeNotifierProvider(create: (_) => JourneyDraftProvider()),
         ChangeNotifierProvider.value(value: LanguageService()),
       ],
       child: const MyApp(),
@@ -79,10 +94,9 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  bool isChecking = true;
-  bool isFirstTime = true;
-  bool isLoggedIn = false;
-  String? savedPhone;
+  bool _onboardingDone = false;
+  bool _hasSession = false;
+  bool _profileComplete = false;
 
   // Deep link handling
   late final AppLinks _appLinks;
@@ -91,7 +105,7 @@ class _MyAppState extends State<MyApp> {
   @override
   void initState() {
     super.initState();
-    checkFirstTime();
+    _checkAuthState();
     _initDeepLinks();
   }
 
@@ -146,35 +160,114 @@ class _MyAppState extends State<MyApp> {
     }
   }
 
-  // ── Startup logic ─────────────────────────────────
-  void checkFirstTime() async {
-    bool seen = await LocalStorageService.isOnboardingComplete();
-    
-    // Fallback for previous users
-    if (!seen) {
-      SharedPreferences prefs = await SharedPreferences.getInstance();
-      seen = prefs.getBool("seenOnboarding") ?? false;
-      if (seen) await LocalStorageService.setOnboardingComplete();
-    }
+  // ══════════════════════════════════════════════════════════════
+  //  STARTUP AUTH CHECK — Single source of truth via SessionManager
+  //
+  //  Decision tree (handled by SessionManager.validateAndRestoreSession):
+  //   SessionState.valid          → restore silently → Home or ProfileSetup
+  //   SessionState.expired        → LoginPage (session too old, need OTP)
+  //   SessionState.notFound       → LoginPage or Onboarding (no session)
+  //   SessionState.firebaseInvalid → LoginPage (Firebase token gone)
+  //
+  //  Onboarding is checked independently from session state.
+  //  A fresh install shows onboarding regardless of session state.
+  // ══════════════════════════════════════════════════════════════
 
-    bool hasSession = await LocalStorageService.hasActiveSession();
+  Future<void> _checkAuthState() async {
+    try {
+      // Run onboarding check and session validation concurrently for speed.
+      final sessionStateFuture = SessionManager.validateAndRestoreSession();
+      final onboardingFuture = LocalStorageService.isOnboardingComplete();
 
-    if (mounted) {
-      setState(() {
-        isFirstTime = !seen;
-        isLoggedIn = hasSession;
-        isChecking = false;
-      });
+      final sessionState = await sessionStateFuture;
+      bool onboardingDone = await onboardingFuture;
+
+      // Legacy migration: check old "seenOnboarding" key from older app versions
+      if (!onboardingDone) {
+        final prefs = await SharedPreferences.getInstance();
+        final legacySeen = prefs.getBool("seenOnboarding") ?? false;
+        if (legacySeen) {
+          await LocalStorageService.setOnboardingComplete();
+          onboardingDone = true;
+        }
+      }
+
+      bool hasValidSession = false;
+      bool profileComplete = false;
+
+      switch (sessionState) {
+        case SessionState.valid:
+          hasValidSession = true;
+          profileComplete = await LocalStorageService.isProfileCompleted();
+          if (!onboardingDone) {
+            await LocalStorageService.setOnboardingComplete();
+            onboardingDone = true;
+          }
+          debugPrint('AUTH_CHECK: ✅ Valid session — routing to home');
+          break;
+
+        case SessionState.expired:
+          hasValidSession = false;
+          profileComplete = false;
+          debugPrint('AUTH_CHECK: ⏰ Session expired — routing to login');
+          break;
+
+        case SessionState.notFound:
+          hasValidSession = false;
+          profileComplete = false;
+          debugPrint('AUTH_CHECK: No session — routing to onboarding/login');
+          break;
+      }
+
+      debugPrint(
+        'AUTH_CHECK: onboarding=$onboardingDone, '
+        'session=$hasValidSession, profile=$profileComplete',
+      );
+
+      if (mounted) {
+        setState(() {
+          _onboardingDone = onboardingDone;
+          _hasSession = hasValidSession;
+          _profileComplete = profileComplete;
+        });
+      }
+    } catch (e) {
+      debugPrint('AUTH_CHECK: ❌ Error: $e');
+      // On any error, fall back safely to login — never show a blank screen.
+      if (mounted) {
+        setState(() {
+          _onboardingDone = true; // Skip onboarding on error to avoid confusion
+          _hasSession = false;
+          _profileComplete = false;
+        });
+      }
     }
   }
 
+  /// Determines which screen to show after the splash animation completes.
   Widget _getDestination() {
-    // BYPASS: Direct open to choose service page
+    if (!_onboardingDone) {
+      // Brand new user: show premium onboarding → login flow
+      return const Onboarding1();
+    }
+    if (!_hasSession) {
+      // Logged out / expired / fresh install after onboarding
+      return const LoginPage();
+    }
+    if (!_profileComplete) {
+      // User is logged in but profile is incomplete (e.g. interrupted setup)
+      return const ProfileSetupPage();
+    }
+
+    // ★ RETURNING USER: valid session + complete profile → home screen
     return const ServiceSelectionPage();
   }
 
   @override
   Widget build(BuildContext context) {
+    // The SplashScreen runs a ~4.8s animation. The auth check (SessionManager)
+    // completes in <100ms. By the time the splash finishes, _getDestination()
+    // returns the correct screen — no race condition.
     return MaterialApp(
       navigatorKey: navigatorKey,
       debugShowCheckedModeBanner: false,
@@ -182,12 +275,10 @@ class _MyAppState extends State<MyApp> {
       theme: ThemeData(
         fontFamily: "Plus Jakarta Sans",
       ),
-      home: isChecking
-          // Show splash while checking auth state — the splash
-          // handles its own animation timing, so the user never
-          // sees a blank screen even if auth check is fast.
-          ? SplashScreen(destination: _getDestination())
-          : SplashScreen(destination: _getDestination()),
+      builder: (context, child) {
+        return InAppNotificationOverlay(child: child ?? const SizedBox.shrink());
+      },
+      home: SplashScreen(destination: _getDestination()),
     );
   }
 }

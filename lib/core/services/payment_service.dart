@@ -35,7 +35,7 @@ class PaymentService {
         'email': email,
       },
       'theme': {
-        'color': '#F27F0D' // Primary color matching UI
+        'color': '#F05A4F' // Primary color matching UI
       }
     };
 

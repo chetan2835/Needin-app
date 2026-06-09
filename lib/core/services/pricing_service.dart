@@ -25,7 +25,7 @@ class PricingService {
   // ── Route + Price Cache (prevents redundant calls) ──
   final Map<String, _CachedPrice> _priceCache = {};
   static const int _maxCacheSize = 50;
-  static const Duration _cacheTTL = Duration(minutes: 15);
+  static const Duration _cacheTTL = Duration(minutes: 5);
 
   // ── Supabase Edge Function URL ──
   String get _edgeFunctionUrl {
@@ -423,8 +423,8 @@ class PricingService {
   static String _perfToString(TimePerformance perf) {
     switch (perf) {
       case TimePerformance.underTime: return 'under_time';
-      case TimePerformance.delayUpTo60: return 'delay_60';
-      case TimePerformance.delayAbove60: return 'delay_above_60';
+      case TimePerformance.delayUpTo30: return 'delay_30';
+      case TimePerformance.delayAbove30: return 'delay_above_30';
     }
   }
 }
